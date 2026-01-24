@@ -8,7 +8,7 @@ import statistics
 # --- CONFIGURATION ---
 CONCURRENCY = 50           
 TOTAL_REQUESTS = 10000     
-TARGET = 'localhost:50052' 
+TARGET = 'localhost:50051' 
 AUTH_TOKEN = 'avap_secret_key_2026'
 PERFORMANCE_THRESHOLD_RPS = 2000 
 
