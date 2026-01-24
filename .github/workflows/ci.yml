@@ -1,9 +1,42 @@
-# 2. PERFORMANCE & STRESS TEST
+name: AVAP Engine CI 🛡️
+
+on:
+  push:
+    branches: [ "main", "master" ]
+  pull_request:
+    branches: [ "main", "master" ]
+
+jobs:
+  # ------------------------------------------------------------------
+  # JOB 1: CALIDAD DE CÓDIGO (Unit Testing)
+  # ------------------------------------------------------------------
+  quality-gate:
+    name: 🧪 Unit Tests
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Setup Node.js 22
+      uses: actions/setup-node@v4
+      with:
+        node-version: '22'
+        cache: 'npm'
+
+    - name: Install Dependencies (Clean)
+      run: npm ci
+
+    - name: Run Jest Tests
+      run: npm test
+
+  # ------------------------------------------------------------------
+  # JOB 2: RENDIMIENTO Y ESTRÉS (Benchmark Real con 'ghz')
+  # ------------------------------------------------------------------
   stress-test:
     name: 🚀 Performance Benchmark
     runs-on: ubuntu-latest
     needs: quality-gate
     
+    # Servicio de Base de Datos Satélite para el Test
     services:
       postgres:
         image: postgres:15-alpine
@@ -20,46 +53,50 @@
 
     steps:
     - uses: actions/checkout@v4
+    
     - uses: actions/setup-node@v4
-      with: { node-version: '22', cache: 'npm' }
+      with:
+        node-version: '22'
+        cache: 'npm'
     
     - run: npm ci
 
-    # 1. Preparar la DB
+    # 1. Preparar datos mínimos en la DB
     - name: Seed Database
       run: |
         sudo apt-get install -y postgresql-client
         export PGPASSWORD=password
+        # Crear tabla y un dato dummy
         psql -h localhost -U postgres -d avap_db -c "CREATE TABLE IF NOT EXISTS obex_dapl_functions (name TEXT PRIMARY KEY, code TEXT, hash TEXT);"
         psql -h localhost -U postgres -d avap_db -c "INSERT INTO obex_dapl_functions (name, code, hash) VALUES ('if', 'print(\"ok\")', '123');"
 
-    # 2. Instalar herramienta de Benchmark (ghz)
-    - name: Install ghz (Benchmark Tool)
+    # 2. Instalar herramienta profesional de Benchmark (ghz)
+    - name: Install ghz (Go Benchmark Tool)
       run: |
         wget https://github.com/bojand/ghz/releases/download/v0.117.0/ghz-linux-x86_64.tar.gz
         tar -xvf ghz-linux-x86_64.tar.gz
         chmod +x ghz
         sudo mv ghz /usr/local/bin/
 
-    # 3. Arrancar Servidor y Disparar Cañón
+    # 3. Arrancar Servidor y Disparar Benchmark
     - name: Run High-Performance Benchmark
       env:
         AVAP_INTERNAL_KEY: "avap_secret_key_2026"
         DATABASE_URL: "postgresql://postgres:password@localhost:5432/avap_db"
         NODE_ENV: "production"
       run: |
-        # Arrancar Servidor (Optimizaciones V8 activas)
+        # A. Arrancar Servidor en background (con V8 Tuning flags)
         node --max-old-space-size=4096 --no-lazy src/server.js &
         SERVER_PID=$!
         
-        echo "⏳ Waiting for server warm-up..."
+        echo "⏳ Waiting 5s for server warm-up..."
         sleep 5
         
         echo "🔥 LAUNCHING CANNON (ghz)..."
-        # GHZ: 50 Conexiones, 10,000 peticiones totales
-        # -n 10000: Total peticiones
-        # -c 50: Concurrencia
-        # --cpus 4: Usar 4 cores del runner para generar carga
+        # Configuración GHZ: 
+        # -n 10000 (Total Peticiones)
+        # -c 50 (Concurrencia)
+        # --cpus 4 (Usar 4 cores para generar carga)
         ghz \
           --proto src/avap.proto \
           --call avap.DefinitionEngine.GetCommand \
@@ -71,11 +108,13 @@
           --cpus 4 \
           localhost:50051 > benchmark_result.txt
           
-        # Mostrar resultado en consola
+        # B. Mostrar resultados
         cat benchmark_result.txt
         
-        # Guardar métricas clave en variables
+        # C. Analizar métricas (Fallo automático si el rendimiento es pobre)
+        # Extraemos RPS y Errores del reporte
         RPS=$(grep "Requests/sec" benchmark_result.txt | awk '{print $2}' | cut -d. -f1)
+        # Contamos líneas de error (si existen)
         ERRORS=$(grep "Error distribution" benchmark_result.txt | wc -l)
 
         # Matar servidor
@@ -85,16 +124,28 @@
         echo "📊 CI RESULT: $RPS Requests/Second"
         echo "----------------------------------------"
 
-        # REGLA DE ORO: Si baja de 5,000 RPS en CI, algo grave pasa.
+        # UMBRAL DE CALIDAD: 5,000 RPS Mínimo en CI
         if [ "$RPS" -lt 5000 ]; then
-          echo "❌ FAILED: Performance is too low (< 5000 RPS). Potential regression."
+          echo "❌ FAILED: Performance regression detected (< 5000 RPS)."
           exit 1
         fi
         
         if [ "$ERRORS" -gt 0 ]; then
-           echo "❌ FAILED: Errors detected in benchmark."
+           echo "❌ FAILED: Errors detected during benchmark."
            exit 1
         fi
         
         echo "✅ PASSED: High Performance Verified."
         exit 0
+
+  # ------------------------------------------------------------------
+  # JOB 3: EMPAQUETADO (Docker)
+  # ------------------------------------------------------------------
+  docker-build:
+    name: 🐳 Docker Build
+    runs-on: ubuntu-latest
+    needs: stress-test # Solo empaquetar si el benchmark pasó
+    steps:
+    - uses: actions/checkout@v4
+    - name: Build Docker Image
+      run: docker build . --file Dockerfile --tag avap-engine:${{ github.sha }}
