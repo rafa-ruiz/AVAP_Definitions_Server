@@ -98,7 +98,7 @@ jobs:
         # -c 50 (Concurrencia)
         # --cpus 4 (Usar 4 cores para generar carga)
         ghz \
-          --proto src/avap.proto \
+          --proto avap.proto \
           --call avap.DefinitionEngine.GetCommand \
           --data '{"name": "if"}' \
           --metadata '{"x-avap-auth": "avap_secret_key_2026"}' \
