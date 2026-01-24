@@ -1,45 +1,100 @@
-name: AVAP Engine CI 🛡️
-
-on:
-  push:
-    branches: [ "main", "master" ]
-  pull_request:
-    branches: [ "main", "master" ]
-
-jobs:
-  # TRABAJO 1: CALIDAD DE CÓDIGO Y TESTS
-  quality-gate:
-    name: 🧪 Unit Tests & Logic
+# 2. PERFORMANCE & STRESS TEST
+  stress-test:
+    name: 🚀 Performance Benchmark
     runs-on: ubuntu-latest
+    needs: quality-gate
     
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_PASSWORD: password
+          POSTGRES_DB: avap_db
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
     steps:
-    - name: Checkout Code
-      uses: actions/checkout@v4
-
-    - name: Setup Node.js 22 (Matches Dockerfile)
-      uses: actions/setup-node@v4
-      with:
-        node-version: '22'
-        cache: 'npm'
-
-    - name: Install Dependencies (Clean)
-      # 'npm ci' es crucial: asegura que usamos las versiones EXACTAS del lockfile
-      run: npm ci
-
-    - name: Run Jest Tests
-      # Si esto falla, el pipeline se detiene aquí
-      run: npm test
-
-  # TRABAJO 2: SIMULACRO DE PRODUCCIÓN
-  docker-build:
-    name: 🐳 Docker Build Check
-    runs-on: ubuntu-latest
-    needs: quality-gate # Solo corre si los tests pasaron
+    - uses: actions/checkout@v4
+    - uses: actions/setup-node@v4
+      with: { node-version: '22', cache: 'npm' }
     
-    steps:
-    - name: Checkout Code
-      uses: actions/checkout@v4
+    - run: npm ci
 
-    - name: Build Docker Image
-      # Esto verifica que el Dockerfile es válido y que npm ci funciona dentro de Linux
-      run: docker build . --file Dockerfile --tag avap-engine:${{ github.sha }}
+    # 1. Preparar la DB
+    - name: Seed Database
+      run: |
+        sudo apt-get install -y postgresql-client
+        export PGPASSWORD=password
+        psql -h localhost -U postgres -d avap_db -c "CREATE TABLE IF NOT EXISTS obex_dapl_functions (name TEXT PRIMARY KEY, code TEXT, hash TEXT);"
+        psql -h localhost -U postgres -d avap_db -c "INSERT INTO obex_dapl_functions (name, code, hash) VALUES ('if', 'print(\"ok\")', '123');"
+
+    # 2. Instalar herramienta de Benchmark (ghz)
+    - name: Install ghz (Benchmark Tool)
+      run: |
+        wget https://github.com/bojand/ghz/releases/download/v0.117.0/ghz-linux-x86_64.tar.gz
+        tar -xvf ghz-linux-x86_64.tar.gz
+        chmod +x ghz
+        sudo mv ghz /usr/local/bin/
+
+    # 3. Arrancar Servidor y Disparar Cañón
+    - name: Run High-Performance Benchmark
+      env:
+        AVAP_INTERNAL_KEY: "avap_secret_key_2026"
+        DATABASE_URL: "postgresql://postgres:password@localhost:5432/avap_db"
+        NODE_ENV: "production"
+      run: |
+        # Arrancar Servidor (Optimizaciones V8 activas)
+        node --max-old-space-size=4096 --no-lazy src/server.js &
+        SERVER_PID=$!
+        
+        echo "⏳ Waiting for server warm-up..."
+        sleep 5
+        
+        echo "🔥 LAUNCHING CANNON (ghz)..."
+        # GHZ: 50 Conexiones, 10,000 peticiones totales
+        # -n 10000: Total peticiones
+        # -c 50: Concurrencia
+        # --cpus 4: Usar 4 cores del runner para generar carga
+        ghz \
+          --proto src/avap.proto \
+          --call avap.DefinitionEngine.GetCommand \
+          --data '{"name": "if"}' \
+          --metadata '{"x-avap-auth": "avap_secret_key_2026"}' \
+          --insecure \
+          --concurrency 50 \
+          --total 10000 \
+          --cpus 4 \
+          localhost:50051 > benchmark_result.txt
+          
+        # Mostrar resultado en consola
+        cat benchmark_result.txt
+        
+        # Guardar métricas clave en variables
+        RPS=$(grep "Requests/sec" benchmark_result.txt | awk '{print $2}' | cut -d. -f1)
+        ERRORS=$(grep "Error distribution" benchmark_result.txt | wc -l)
+
+        # Matar servidor
+        kill $SERVER_PID
+        
+        echo "----------------------------------------"
+        echo "📊 CI RESULT: $RPS Requests/Second"
+        echo "----------------------------------------"
+
+        # REGLA DE ORO: Si baja de 5,000 RPS en CI, algo grave pasa.
+        if [ "$RPS" -lt 5000 ]; then
+          echo "❌ FAILED: Performance is too low (< 5000 RPS). Potential regression."
+          exit 1
+        fi
+        
+        if [ "$ERRORS" -gt 0 ]; then
+           echo "❌ FAILED: Errors detected in benchmark."
+           exit 1
+        fi
+        
+        echo "✅ PASSED: High Performance Verified."
+        exit 0
