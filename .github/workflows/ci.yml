@@ -49,7 +49,7 @@ jobs:
         API_KEY: avap_secret_key_2026
         PORT: 50051
       run: |
-        PGPASSWORD=avap_password psql -h localhost -U avap_user -d avap_db -f db/init.sql
+        PGPASSWORD=avap_password psql -h localhost -U avap_user -d avap_db -f init.sql
         node src/server.js &
         echo "⏳ Waiting for server to launch..."
         sleep 5
@@ -65,7 +65,6 @@ jobs:
         NODE_ENV: test
       run: |
         echo "### 🧠 STEP 1: Functional Integrity"
-        # Forzamos a Jest a correr sin detenerse por advertencias de Lint
         npm test -- --ci --detectOpenHandles --forceExit
         python tests/test_brain.py
 
