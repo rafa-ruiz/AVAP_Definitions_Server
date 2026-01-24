@@ -57,7 +57,7 @@ jobs:
       env:
         PGPASSWORD: avap_password
       run: |
-        psql -h localhost -U avap_user -d avap_db -f db/init.sql
+        psql -h localhost -U avap_user -d avap_db -f init.sql
 
     # 6. Arrancar el Servidor Node.js
     # Lo ejecutamos en background (&) y esperamos un poco para asegurar que sube
