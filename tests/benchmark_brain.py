@@ -7,7 +7,7 @@ import concurrent.futures
 # --- CONFIGURATION ---
 CONCURRENCY = 50           # Simultaneous threads (simulating 50 active scripts)
 TOTAL_REQUESTS = 10000     # Total requests to launch
-TARGET = 'localhost:50052' # Docker Port
+TARGET = 'localhost:50051' # Docker Port
 AUTH_TOKEN = 'avap_secret_key_2026'
 
 # --- PERFORMANCE BUDGET (CI/CD ALERT) ---
