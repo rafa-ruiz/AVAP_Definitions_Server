@@ -1,0 +1,45 @@
+name: AVAP Engine CI 🛡️
+
+on:
+  push:
+    branches: [ "main", "master" ]
+  pull_request:
+    branches: [ "main", "master" ]
+
+jobs:
+  # TRABAJO 1: CALIDAD DE CÓDIGO Y TESTS
+  quality-gate:
+    name: 🧪 Unit Tests & Logic
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout Code
+      uses: actions/checkout@v4
+
+    - name: Setup Node.js 22 (Matches Dockerfile)
+      uses: actions/setup-node@v4
+      with:
+        node-version: '22'
+        cache: 'npm'
+
+    - name: Install Dependencies (Clean)
+      # 'npm ci' es crucial: asegura que usamos las versiones EXACTAS del lockfile
+      run: npm ci
+
+    - name: Run Jest Tests
+      # Si esto falla, el pipeline se detiene aquí
+      run: npm test
+
+  # TRABAJO 2: SIMULACRO DE PRODUCCIÓN
+  docker-build:
+    name: 🐳 Docker Build Check
+    runs-on: ubuntu-latest
+    needs: quality-gate # Solo corre si los tests pasaron
+    
+    steps:
+    - name: Checkout Code
+      uses: actions/checkout@v4
+
+    - name: Build Docker Image
+      # Esto verifica que el Dockerfile es válido y que npm ci funciona dentro de Linux
+      run: docker build . --file Dockerfile --tag avap-engine:${{ github.sha }}

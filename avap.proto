@@ -1,0 +1,21 @@
+syntax = "proto3";
+
+package avap;
+
+// Servicio Principal
+service DefinitionEngine {
+  // Obtiene la definición binaria de un comando
+  rpc GetCommand (CommandRequest) returns (CommandResponse);
+}
+
+message CommandRequest {
+  string name = 1;
+}
+
+message CommandResponse {
+  string name = 1;
+  bytes code = 2;       // Código fuente enviado como binario
+  string interface = 3; // JSON String
+  string hash = 4;      // Firma de integridad
+  bool found = 5;       // Bandera de existencia
+}
