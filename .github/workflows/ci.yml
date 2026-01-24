@@ -31,7 +31,7 @@ jobs:
           DATABASE_URL: postgres://avap_user:avap_password@localhost:5432/avap_db
           API_KEY: avap_secret_key_2026
         run: |
-          PGPASSWORD=avap_password psql -h localhost -U avap_user -d avap_db -f db/init.sql
+          PGPASSWORD=avap_password psql -h localhost -U avap_user -d avap_db -f init.sql
           npm test
 
   # --- STEP 2: PERFORMANCE (Ghz & Benchmark) ---
