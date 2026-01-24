@@ -34,11 +34,21 @@ jobs:
           PGPASSWORD=avap_password psql -h localhost -U avap_user -d avap_db -f init.sql
           npm test
 
-  # --- STEP 2: PERFORMANCE ---
+  # --- STEP 2: PERFORMANCE (Ahora con su propia DB para el Warm-up) ---
   performance:
     name: "STEP 2: Performance & Budget"
     needs: integrity
     runs-on: ubuntu-latest
+    services:
+      # Necesitamos Postgres aquí para que el server pueda hacer el 'Warm-up' de la caché
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_USER: avap_user
+          POSTGRES_PASSWORD: avap_password
+          POSTGRES_DB: avap_db
+        ports: [5432:5432]
+        options: --health-cmd pg_isready --health-interval 10s --health-timeout 5s --health-retries 5
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -47,23 +57,26 @@ jobs:
       - uses: actions/setup-python@v4
         with:
           python-version: '3.10'
-      - name: Install & Run Benchmark
+      - name: Install, Warm-up & Benchmark
         env:
           API_KEY: avap_secret_key_2026
+          DATABASE_URL: postgres://avap_user:avap_password@localhost:5432/avap_db
           PORT: 50051
-          # Forzamos a Python y ghz a mirar el mismo puerto
           TARGET: "localhost:50051" 
         run: |
           npm ci
           pip install grpcio grpcio-tools
           
-          # Arrancar servidor con variables explícitas
-          PORT=50051 API_KEY=$API_KEY node src/server.js &
+          # 1. Poblar la DB del Job actual para que el server encuentre datos al cargar
+          PGPASSWORD=avap_password psql -h localhost -U avap_user -d avap_db -f db/init.sql
           
-          echo "⏳ Waiting for gRPC server on port 50051..."
+          # 2. Arrancar servidor
+          node src/server.js &
+          
+          # 3. Esperar a que el puerto gRPC esté abierto
           timeout 30s sh -c 'until nc -z localhost 50051; do sleep 1; done'
           
-          # GHZ Benchmark
+          # 4. GHZ Benchmark
           wget https://github.com/bojand/ghz/releases/download/v0.120.0/ghz-linux-x86_64.tar.gz
           tar -xf ghz-linux-x86_64.tar.gz
           ./ghz --insecure --proto ./avap.proto --call avap.DefinitionEngine.GetCommand \
@@ -71,11 +84,9 @@ jobs:
             --metadata "{\"x-avap-auth\":\"$API_KEY\"}" \
             --total 2000 --concurrency 10 localhost:50051
           
-          # Python Regression (Compilar y Ejecutar)
+          # 5. Python Regression
           python -m grpc_tools.protoc -I. --python_out=app/core --grpc_python_out=app/core avap.proto
           sed -i 's/import avap_pb2 as avap__pb2/from . import avap_pb2 as avap__pb2/' app/core/avap_pb2_grpc.py
-          
-          # Sobrescribimos el TARGET en el comando para evitar errores de config
           PYTHONPATH=. python tests/benchmark_brain.py
 
   # --- STEP 3: DOCKER BUILD ---
@@ -85,15 +96,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
       - name: Build Local Image
         uses: docker/build-push-action@v5
         with:
           context: .
           tags: avap-engine:latest
           outputs: type=docker,dest=/tmp/avap-engine.tar
-      - name: Verify Image
+      - name: Verify
         run: |
           docker load --input /tmp/avap-engine.tar
           docker images
