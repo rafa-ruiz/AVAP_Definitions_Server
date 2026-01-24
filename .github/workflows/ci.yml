@@ -26,68 +26,67 @@ jobs:
           --health-retries 5
 
     steps:
-    - name: 📥 Checkout Code
+    - name: Checkout Code
       uses: actions/checkout@v4
 
-    - name: 🟢 Setup Environments (Node & Python)
+    - name: Setup Environments
       uses: actions/setup-node@v4
       with:
         node-version: '20'
+
     - name: Setup Python
       uses: actions/setup-python@v4
       with:
         python-version: '3.10'
 
-    - name: 📦 Install Dependencies
+    - name: Install Dependencies
       run: |
         npm ci
         pip install grpcio grpcio-tools
 
-    - name: 🗄️ Init Database & Start Server
+    - name: Init DB & Start Server
       env:
         DATABASE_URL: postgres://avap_user:avap_password@localhost:5432/avap_db
         API_KEY: avap_secret_key_2026
         PORT: 50051
       run: |
-        PGPASSWORD=avap_password psql -h localhost -U avap_user -d avap_db -f init.sql
+        PGPASSWORD=avap_password psql -h localhost -U avap_user -d avap_db -f db/init.sql
         node src/server.js &
-        echo "⏳ Waiting for server to launch..."
         sleep 5
 
-    - name: 🛠️ Compile Protos & Patch Imports
+    - name: Compile Protos
       run: |
         python -m grpc_tools.protoc -I. --python_out=app/core --grpc_python_out=app/core avap.proto
         sed -i 's/import avap_pb2 as avap__pb2/from . import avap_pb2 as avap__pb2/' app/core/avap_pb2_grpc.py
 
-    - name: 🧪 STEP 1: Unit & Integration Tests
+    - name: "STEP 1: Unit & Integration"
       env:
         CI: true
         NODE_ENV: test
       run: |
-        echo "### 🧠 STEP 1: Functional Integrity"
         npm test -- --ci --detectOpenHandles --forceExit
         python tests/test_brain.py
 
-    - name: 🚀 STEP 2: High-Performance Benchmarking (ghz)
+    - name: "STEP 2: Raw Capacity (ghz)"
+      env:
+        GHZ_DATA: '{"name":"if"}'
+        GHZ_METADATA: '{"x-avap-auth":"avap_secret_key_2026"}'
       run: |
-        echo "### 🚀 STEP 2: Raw Capacity Report"
         wget https://github.com/bojand/ghz/releases/download/v0.120.0/ghz-linux-x86_64.tar.gz
         tar -xf ghz-linux-x86_64.tar.gz
         ./ghz --insecure \
           --proto ./avap.proto \
           --call avap.DefinitionEngine.GetCommand \
-          --data '{"name":"if"}' \
-          --metadata '{"x-avap-auth":"avap_secret_key_2026"}' \
+          --data "$GHZ_DATA" \
+          --metadata "$GHZ_METADATA" \
           --total 5000 \
           --concurrency 20 \
           localhost:50051
 
-    - name: ⚖️ STEP 3: Performance Budget & Regression
-      run: |
-        echo "### ⚖️ STEP 3: Final Budget Check"
-        python tests/benchmark_brain.py
+    - name: "STEP 3: Budget Check"
+      run: python tests/benchmark_brain.py
 
-    - name: 📊 Final Summary
+    - name: Final Summary
       if: always()
       run: |
         echo "===================================================="
