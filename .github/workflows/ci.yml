@@ -7,7 +7,7 @@ on:
     branches: [ "main" ]
 
 jobs:
-  # --- STEP 1: INTEGRIDAD (Unit Tests) ---
+  # --- STEP 1: INTEGRIDAD ---
   integrity:
     name: "STEP 1: Functional Integrity"
     runs-on: ubuntu-latest
@@ -34,7 +34,7 @@ jobs:
           PGPASSWORD=avap_password psql -h localhost -U avap_user -d avap_db -f init.sql
           npm test
 
-  # --- STEP 2: PERFORMANCE (Ghz & Benchmark) ---
+  # --- STEP 2: PERFORMANCE ---
   performance:
     name: "STEP 2: Performance & Budget"
     needs: integrity
@@ -49,21 +49,34 @@ jobs:
           python-version: '3.10'
       - name: Install & Run Benchmark
         env:
-          GHZ_DATA: '{"name":"if"}'
           API_KEY: avap_secret_key_2026
+          PORT: 50051
+          # Forzamos a Python y ghz a mirar el mismo puerto
+          TARGET: "localhost:50051" 
         run: |
           npm ci
           pip install grpcio grpcio-tools
-          node src/server.js &
-          sleep 5
+          
+          # Arrancar servidor con variables explícitas
+          PORT=50051 API_KEY=$API_KEY node src/server.js &
+          
+          echo "⏳ Waiting for gRPC server on port 50051..."
+          timeout 30s sh -c 'until nc -z localhost 50051; do sleep 1; done'
+          
           # GHZ Benchmark
           wget https://github.com/bojand/ghz/releases/download/v0.120.0/ghz-linux-x86_64.tar.gz
           tar -xf ghz-linux-x86_64.tar.gz
-          ./ghz --insecure --proto ./avap.proto --call avap.DefinitionEngine.GetCommand --data "$GHZ_DATA" --metadata "{\"x-avap-auth\":\"$API_KEY\"}" --total 2000 --concurrency 10 localhost:50051
-          # Python Regression
+          ./ghz --insecure --proto ./avap.proto --call avap.DefinitionEngine.GetCommand \
+            --data '{"name":"if"}' \
+            --metadata "{\"x-avap-auth\":\"$API_KEY\"}" \
+            --total 2000 --concurrency 10 localhost:50051
+          
+          # Python Regression (Compilar y Ejecutar)
           python -m grpc_tools.protoc -I. --python_out=app/core --grpc_python_out=app/core avap.proto
           sed -i 's/import avap_pb2 as avap__pb2/from . import avap_pb2 as avap__pb2/' app/core/avap_pb2_grpc.py
-          python tests/benchmark_brain.py
+          
+          # Sobrescribimos el TARGET en el comando para evitar errores de config
+          PYTHONPATH=. python tests/benchmark_brain.py
 
   # --- STEP 3: DOCKER BUILD ---
   docker_build:
@@ -80,7 +93,7 @@ jobs:
           context: .
           tags: avap-engine:latest
           outputs: type=docker,dest=/tmp/avap-engine.tar
-      - name: Verify Image Size
+      - name: Verify Image
         run: |
           docker load --input /tmp/avap-engine.tar
           docker images
