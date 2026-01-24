@@ -7,7 +7,7 @@ on:
     branches: [ "main" ]
 
 jobs:
-  # --- JOB 1: INTEGRIDAD ---
+  # --- STEP 1: INTEGRIDAD (Unit Tests) ---
   integrity:
     name: "STEP 1: Functional Integrity"
     runs-on: ubuntu-latest
@@ -31,33 +31,13 @@ jobs:
           DATABASE_URL: postgres://avap_user:avap_password@localhost:5432/avap_db
           API_KEY: avap_secret_key_2026
         run: |
-          PGPASSWORD=avap_password psql -h localhost -U avap_user -d avap_db -f init.sql
+          PGPASSWORD=avap_password psql -h localhost -U avap_user -d avap_db -f db/init.sql
           npm test
 
-  # --- JOB 2: CAPACIDAD ---
-  capacity:
-    name: "STEP 2: Raw Capacity"
-    needs: integrity  # Esto crea la línea que conecta las pastillas
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-      - name: Run ghz Benchmark
-        env:
-          GHZ_DATA: '{"name":"if"}'
-        run: |
-          node src/server.js &
-          sleep 3
-          wget https://github.com/bojand/ghz/releases/download/v0.120.0/ghz-linux-x86_64.tar.gz
-          tar -xf ghz-linux-x86_64.tar.gz
-          ./ghz --insecure --proto ./avap.proto --call avap.DefinitionEngine.GetCommand --data "$GHZ_DATA" --metadata '{"x-avap-auth":"avap_secret_key_2026"}' --total 2000 --concurrency 10 localhost:50051
-
-  # --- JOB 3: REGRESIÓN ---
-  regression:
-    name: "STEP 3: Performance Budget"
-    needs: capacity # Conecta la segunda pastilla con la tercera
+  # --- STEP 2: PERFORMANCE (Ghz & Benchmark) ---
+  performance:
+    name: "STEP 2: Performance & Budget"
+    needs: integrity
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -67,10 +47,40 @@ jobs:
       - uses: actions/setup-python@v4
         with:
           python-version: '3.10'
-      - run: |
+      - name: Install & Run Benchmark
+        env:
+          GHZ_DATA: '{"name":"if"}'
+          API_KEY: avap_secret_key_2026
+        run: |
+          npm ci
           pip install grpcio grpcio-tools
           node src/server.js &
-          sleep 3
+          sleep 5
+          # GHZ Benchmark
+          wget https://github.com/bojand/ghz/releases/download/v0.120.0/ghz-linux-x86_64.tar.gz
+          tar -xf ghz-linux-x86_64.tar.gz
+          ./ghz --insecure --proto ./avap.proto --call avap.DefinitionEngine.GetCommand --data "$GHZ_DATA" --metadata "{\"x-avap-auth\":\"$API_KEY\"}" --total 2000 --concurrency 10 localhost:50051
+          # Python Regression
           python -m grpc_tools.protoc -I. --python_out=app/core --grpc_python_out=app/core avap.proto
           sed -i 's/import avap_pb2 as avap__pb2/from . import avap_pb2 as avap__pb2/' app/core/avap_pb2_grpc.py
           python tests/benchmark_brain.py
+
+  # --- STEP 3: DOCKER BUILD ---
+  docker_build:
+    name: "STEP 3: Containerize"
+    needs: performance
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      - name: Build Local Image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          tags: avap-engine:latest
+          outputs: type=docker,dest=/tmp/avap-engine.tar
+      - name: Verify Image Size
+        run: |
+          docker load --input /tmp/avap-engine.tar
+          docker images
