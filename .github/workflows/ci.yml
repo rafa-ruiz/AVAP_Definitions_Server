@@ -68,7 +68,7 @@ jobs:
           pip install grpcio grpcio-tools
           
           # 1. Poblar la DB del Job actual para que el server encuentre datos al cargar
-          PGPASSWORD=avap_password psql -h localhost -U avap_user -d avap_db -f db/init.sql
+          PGPASSWORD=avap_password psql -h localhost -U avap_user -d avap_db -f init.sql
           
           # 2. Arrancar servidor
           node src/server.js &
