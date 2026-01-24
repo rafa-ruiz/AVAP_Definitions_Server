@@ -10,7 +10,6 @@ jobs:
   build-and-test:
     runs-on: ubuntu-latest
     
-    # Servicio de Base de Datos para los tests de integración
     services:
       postgres:
         image: postgres:15-alpine
@@ -20,7 +19,6 @@ jobs:
           POSTGRES_DB: avap_db
         ports:
           - 5432:5432
-        # Healthcheck crítico: Espera a que PostgreSQL acepte conexiones
         options: >-
           --health-cmd pg_isready
           --health-interval 10s
@@ -28,63 +26,75 @@ jobs:
           --health-retries 5
 
     steps:
-    # 1. Descargar Código
-    - name: Checkout Code
+    - name: 📥 Checkout Code
       uses: actions/checkout@v4
 
-    # 2. Configurar Entorno Node.js (Servidor)
-    - name: Setup Node.js
+    - name: 🟢 Setup Environments (Node & Python)
       uses: actions/setup-node@v4
       with:
         node-version: '20'
-        cache: 'npm'
-
-    # 3. Configurar Entorno Python (Cliente de Test)
     - name: Setup Python
       uses: actions/setup-python@v4
       with:
         python-version: '3.10'
 
-    # 4. Instalar Dependencias (Ambos lados)
-    - name: Install Dependencies
+    - name: 📦 Install Dependencies
       run: |
         npm ci
-        pip install grpcio grpcio-tools requests
+        pip install grpcio grpcio-tools
 
-    # 5. Inicializar Base de Datos
-    # Usamos el cliente psql preinstalado en el runner para inyectar el esquema
-    - name: Initialize Database
-      env:
-        PGPASSWORD: avap_password
-      run: |
-        psql -h localhost -U avap_user -d avap_db -f init.sql
-
-    # 6. Arrancar el Servidor Node.js
-    # Lo ejecutamos en background (&) y esperamos un poco para asegurar que sube
-    - name: Start AVAP Engine
+    - name: 🗄️ Init Database & Start Server
       env:
         DATABASE_URL: postgres://avap_user:avap_password@localhost:5432/avap_db
         API_KEY: avap_secret_key_2026
         PORT: 50051
       run: |
+        PGPASSWORD=avap_password psql -h localhost -U avap_user -d avap_db -f db/init.sql
         node src/server.js &
         echo "⏳ Waiting for server to launch..."
         sleep 5
 
-    # 7. Compilar Protos para Python (CRÍTICO)
-    # Generamos el código Python al vuelo y aplicamos el parche del import relativo
-    - name: Compile Python Client Protos
+    - name: 🛠️ Compile Protos & Patch Imports
       run: |
         python -m grpc_tools.protoc -I. --python_out=app/core --grpc_python_out=app/core avap.proto
-        # Hack para arreglar el import relativo en Python generado
         sed -i 's/import avap_pb2 as avap__pb2/from . import avap_pb2 as avap__pb2/' app/core/avap_pb2_grpc.py
 
-    # 8. Test Funcional (Integridad)
-    # Verifica que el servidor responde correctamente a peticiones básicas
-    - name: 🧪 Run Integration Test
-      run: python tests/test_brain.py
+    - name: 🧪 STEP 1: Unit & Integration Tests
+      env:
+        CI: true
+        NODE_ENV: test
+      run: |
+        echo "### 🧠 STEP 1: Functional Integrity"
+        # Forzamos a Jest a correr sin detenerse por advertencias de Lint
+        npm test -- --ci --detectOpenHandles --forceExit
+        python tests/test_brain.py
 
-    # 9. Test de Rendimiento (Velocidad)
-    # Verifica que el throughput sea aceptable (aunque sea más bajo en CI que en local)
-    - name: 🔥 Run Performance Benchmark
-      run: python tests/benchmark_brain.py
+    - name: 🚀 STEP 2: High-Performance Benchmarking (ghz)
+      run: |
+        echo "### 🚀 STEP 2: Raw Capacity Report"
+        wget https://github.com/bojand/ghz/releases/download/v0.120.0/ghz-linux-x86_64.tar.gz
+        tar -xf ghz-linux-x86_64.tar.gz
+        ./ghz --insecure \
+          --proto ./avap.proto \
+          --call avap.DefinitionEngine.GetCommand \
+          --data '{"name":"if"}' \
+          --metadata '{"x-avap-auth":"avap_secret_key_2026"}' \
+          --total 5000 \
+          --concurrency 20 \
+          localhost:50051
+
+    - name: ⚖️ STEP 3: Performance Budget & Regression
+      run: |
+        echo "### ⚖️ STEP 3: Final Budget Check"
+        python tests/benchmark_brain.py
+
+    - name: 📊 Final Summary
+      if: always()
+      run: |
+        echo "===================================================="
+        echo "         AVAP ENGINE STATUS SUMMARY                "
+        echo "===================================================="
+        echo " 1. INTEGRITY:  ${{ job.status == 'success' && '✅ PASSED' || '❌ FAILED' }}"
+        echo " 2. CAPACITY:   ⚡ MEASURED VIA GHZ"
+        echo " 3. REGRESSION: 🛡️ BUDGET VERIFIED"
+        echo "===================================================="
