@@ -21,7 +21,7 @@ def run_test():
     
     # Server Address (Docker: localhost:50052, Local: localhost:50051)
     # Adjust depending on how you are running the Node server.
-    target = 'localhost:50052' 
+    target = 'localhost:50051' 
     
     # 3. CREATE gRPC CHANNEL
     with grpc.insecure_channel(target) as channel:
