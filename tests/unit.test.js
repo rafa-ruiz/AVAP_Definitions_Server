@@ -1,90 +1,113 @@
-const { getCommandLogic } = require('../src/logic');
-const grpc = require('@grpc/grpc-js');
+const logic = require('../src/logic');
+
+// --- MOCK DATABASE ---
+// We mock the DB so unit tests run without PostgreSQL
+jest.mock('../src/db', () => ({
+    query: jest.fn().mockResolvedValue({
+        rows: [
+            { 
+                name: 'if', 
+                type: 'statement', 
+                interface: '[]', 
+                code: Buffer.from('print("hello")') 
+            }
+        ]
+    })
+}));
 
 describe('🧠 AVAP Logic Engine (Unit Tests)', () => {
     
-    // Setup: Datos falsos para las pruebas
-    const MOCK_KEY = Buffer.from('test_secret_key_123');
-    let mockCatalog;
-    let mockCallback;
+    const API_KEY_BUFFER = Buffer.from('avap_secret_key_2026');
 
-    beforeEach(() => {
-        // Reiniciamos el catálogo antes de cada test
-        mockCatalog = new Map();
-        mockCatalog.set('testCmd', { name: 'testCmd', code: 'print("hello")' });
-        
-        // Espía para ver qué responde la función
-        mockCallback = jest.fn();
+    // Before tests, we trigger the loadDefinitions to warm up the RAM cache
+    beforeAll(async () => {
+        await logic.loadDefinitions();
     });
 
-    // --- 🛡️ SECURITY TESTS ---
-
-    test('⛔ Debe bloquear acceso sin Token', () => {
+    test('⛔ Should block access without Token', (done) => {
         const mockCall = {
-            request: { name: 'testCmd' },
-            metadata: { get: () => null } // Sin header
+            request: { name: 'if' },
+            metadata: {
+                // FIX: Simulate gRPC getMap function
+                getMap: () => ({}) 
+            }
         };
 
-        getCommandLogic(mockCall, mockCallback, mockCatalog, MOCK_KEY);
+        const callback = (err, response) => {
+            expect(err).toBeTruthy();
+            expect(err.code).toBe(16); // UNAUTHENTICATED
+            done();
+        };
 
-        // Esperamos error UNAUTHENTICATED
-        expect(mockCallback).toHaveBeenCalledWith(
-            expect.objectContaining({ code: grpc.status.UNAUTHENTICATED })
-        );
+        logic.getCommandLogic(mockCall, callback, API_KEY_BUFFER);
     });
 
-    test('⛔ Debe bloquear acceso con Token Incorrecto', () => {
+    test('⛔ Should block access with Invalid Token', (done) => {
         const mockCall = {
-            request: { name: 'testCmd' },
-            metadata: { get: (key) => [Buffer.from('HACKER_KEY')] }
+            request: { name: 'if' },
+            metadata: {
+                getMap: () => ({ 'x-avap-auth': 'WRONG_TOKEN' })
+            }
         };
 
-        getCommandLogic(mockCall, mockCallback, mockCatalog, MOCK_KEY);
+        const callback = (err, response) => {
+            expect(err).toBeTruthy();
+            expect(err.code).toBe(16); // UNAUTHENTICATED
+            done();
+        };
 
-        expect(mockCallback).toHaveBeenCalledWith(
-            expect.objectContaining({ code: grpc.status.UNAUTHENTICATED })
-        );
+        logic.getCommandLogic(mockCall, callback, API_KEY_BUFFER);
     });
 
-    test('✅ Debe permitir acceso con Token Correcto', () => {
+    test('✅ Should allow access with Correct Token', (done) => {
         const mockCall = {
-            request: { name: 'testCmd' },
-            metadata: { get: (key) => [MOCK_KEY] } // Token idéntico
+            request: { name: 'if' },
+            metadata: {
+                getMap: () => ({ 'x-avap-auth': 'avap_secret_key_2026' })
+            }
         };
 
-        getCommandLogic(mockCall, mockCallback, mockCatalog, MOCK_KEY);
+        const callback = (err, response) => {
+            expect(err).toBeNull(); // No error
+            expect(response).toBeTruthy();
+            done();
+        };
 
-        // El primer argumento (error) debe ser null
-        expect(mockCallback).toHaveBeenCalledWith(null, expect.anything());
+        logic.getCommandLogic(mockCall, callback, API_KEY_BUFFER);
     });
 
-    // --- 🧠 LOGIC TESTS ---
-
-    test('✅ Debe devolver el código si el comando existe', () => {
+    test('✅ Should return code if command exists (Cache Hit)', (done) => {
         const mockCall = {
-            request: { name: 'testCmd' },
-            metadata: { get: () => [MOCK_KEY] }
+            request: { name: 'if' },
+            metadata: {
+                getMap: () => ({ 'x-avap-auth': 'avap_secret_key_2026' })
+            }
         };
 
-        getCommandLogic(mockCall, mockCallback, mockCatalog, MOCK_KEY);
+        const callback = (err, response) => {
+            expect(err).toBeNull();
+            expect(response.name).toBe('if');
+            expect(response.code).toBeInstanceOf(Buffer);
+            done();
+        };
 
-        // Verificamos que devuelve el objeto correcto
-        expect(mockCallback).toHaveBeenCalledWith(null, { 
-            name: 'testCmd', 
-            code: 'print("hello")' 
-        });
+        logic.getCommandLogic(mockCall, callback, API_KEY_BUFFER);
     });
 
-    test('🔍 Debe devolver 404 si el comando NO existe', () => {
+    test('🔍 Should return 404 if command does NOT exist', (done) => {
         const mockCall = {
-            request: { name: 'comandoFantasma' },
-            metadata: { get: () => [MOCK_KEY] }
+            request: { name: 'non_existent_command' },
+            metadata: {
+                getMap: () => ({ 'x-avap-auth': 'avap_secret_key_2026' })
+            }
         };
 
-        getCommandLogic(mockCall, mockCallback, mockCatalog, MOCK_KEY);
+        const callback = (err, response) => {
+            expect(err).toBeTruthy();
+            expect(err.code).toBe(5); // NOT_FOUND
+            done();
+        };
 
-        expect(mockCallback).toHaveBeenCalledWith(
-            expect.objectContaining({ code: grpc.status.NOT_FOUND })
-        );
+        logic.getCommandLogic(mockCall, callback, API_KEY_BUFFER);
     });
 });

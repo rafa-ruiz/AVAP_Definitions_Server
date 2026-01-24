@@ -15,7 +15,6 @@ async function loadDefinitions() {
         
         definitionCache.clear();
         res.rows.forEach(row => {
-            // Guardamos Buffer para el código
             const codeBuf = row.code ? Buffer.from(row.code) : Buffer.from("");
             
             definitionCache.set(row.name, {
@@ -34,13 +33,31 @@ async function loadDefinitions() {
 }
 
 /**
+ * Helper interno para validación de seguridad
+ * Evita el RangeError si las longitudes no coinciden
+ */
+const isAuthorized = (metadata, apiKeyBuffer) => {
+    const authVal = metadata['x-avap-auth'];
+    if (!authVal) return false;
+
+    const receivedBuffer = Buffer.from(authVal);
+    
+    // Si las longitudes son diferentes, timingSafeEqual lanzaría un error.
+    // Retornamos false directamente por seguridad.
+    if (receivedBuffer.length !== apiKeyBuffer.length) {
+        return false;
+    }
+
+    return crypto.timingSafeEqual(receivedBuffer, apiKeyBuffer);
+};
+
+/**
  * Lógica para obtener un solo comando
  */
 const getCommandLogic = (call, callback, apiKeyBuffer) => {
     const metadata = call.metadata.getMap();
-    const authVal = metadata['x-avap-auth'];
 
-    if (!authVal || !crypto.timingSafeEqual(Buffer.from(authVal), apiKeyBuffer)) {
+    if (!isAuthorized(metadata, apiKeyBuffer)) {
         return callback({
             code: grpc.status.UNAUTHENTICATED,
             details: 'Invalid Credentials'
@@ -71,9 +88,8 @@ const getCommandLogic = (call, callback, apiKeyBuffer) => {
  */
 const syncCatalogLogic = (call, callback, apiKeyBuffer) => {
     const metadata = call.metadata.getMap();
-    const authVal = metadata['x-avap-auth'];
 
-    if (!authVal || !crypto.timingSafeEqual(Buffer.from(authVal), apiKeyBuffer)) {
+    if (!isAuthorized(metadata, apiKeyBuffer)) {
         return callback({
             code: grpc.status.UNAUTHENTICATED,
             details: 'Invalid Credentials'
