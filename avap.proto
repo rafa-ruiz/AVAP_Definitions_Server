@@ -2,11 +2,16 @@ syntax = "proto3";
 
 package avap;
 
-// Servicio Principal
 service DefinitionEngine {
-  // Obtiene la definición binaria de un comando
+  // Obtiene un solo comando (Legacy / Debug)
   rpc GetCommand (CommandRequest) returns (CommandResponse);
+  
+  // NUEVO: Descarga el cerebro entero de una vez
+  rpc SyncCatalog (Empty) returns (CatalogResponse);
 }
+
+// Mensaje vacío para pedir todo sin parámetros
+message Empty {}
 
 message CommandRequest {
   string name = 1;
@@ -14,8 +19,15 @@ message CommandRequest {
 
 message CommandResponse {
   string name = 1;
-  bytes code = 2;       // Código fuente enviado como binario
-  string interface = 3; // JSON String
-  string hash = 4;      // Firma de integridad
-  bool found = 5;       // Bandera de existencia
+  string type = 2;
+  string interface_json = 3;
+  string code = 4;
+  string hash = 5;
+}
+
+// La lista completa para la replicación
+message CatalogResponse {
+  repeated CommandResponse commands = 1;
+  int32 total_count = 2;
+  string version_hash = 3;
 }

@@ -1,164 +1,69 @@
 const grpc = require('@grpc/grpc-js');
 const protoLoader = require('@grpc/proto-loader');
-const { HealthImplementation } = require('grpc-health-check'); // STANDARD 1
-const client = require('prom-client'); // STANDARD 2
+const { HealthImplementation } = require('grpc-health-check');
+const client = require('prom-client');
 const path = require('path');
-const cluster = require('cluster');
-const os = require('os');
-const crypto = require('crypto');
 
-const { getCommandLogic } = require('./logic');
+// Importamos la lógica
+const logic = require('./logic');
 
-// --- 0. CONFIGURATION & METRICS SETUP ---
+// --- CONFIGURATION ---
 const API_KEY = process.env.API_KEY || 'avap_secret_key_2026';
 const PORT = process.env.PORT || '50051';
-const REFRESH_INTERVAL_MS = 60 * 1000;
 const API_KEY_BUFFER = Buffer.from(API_KEY);
 
-// Prometheus Registry (Metrics)
+// --- METRICS ---
 const register = new client.Registry();
-const gaugeCacheSize = new client.Gauge({ name: 'avap_cache_size', help: 'Number of definitions in RAM' });
-const counterRequests = new client.Counter({ name: 'avap_requests_total', help: 'Total requests served', labelNames: ['status'] });
-register.setDefaultLabels({ app: 'avap-engine' });
+client.collectDefaultMetrics({ register });
 
-// JSON Logger (STANDARD 3)
+// --- LOGGER ---
 const log = (level, msg, meta = {}) => {
   console.log(JSON.stringify({
-    ts: new Date().toISOString(),
-    level,
-    msg,
-    pid: process.pid,
-    ...meta
+    ts: new Date().toISOString(), level, msg, ...meta
   }));
 };
 
-// --- 1. CLUSTER MASTER ---
-if (cluster.isPrimary) {
-  const { Pool } = require('pg');
-  const numCPUs = os.cpus().length;
-  
-  log('INFO', `🚀 MASTER initializing Cloud-Native Cluster with ${numCPUs} cores.`);
+async function startServer() {
+    // 1. Cargar datos en memoria antes de abrir puertos
+    await logic.loadDefinitions();
 
-  const pool = new Pool({ connectionString: process.env.DATABASE_URL });
-  
-  const broadcastData = async () => {
-    try {
-      const start = process.hrtime.bigint();
-      const res = await pool.query('SELECT name, code FROM obex_dapl_functions WHERE code IS NOT NULL');
-      
-      const payload = res.rows.map(r => ({ n: r.name, c: r.code }));
-      
-      // Update Master Metric
-      gaugeCacheSize.set(payload.length);
+    // 2. Preparar gRPC
+    const PROTO_PATH = path.join(__dirname, '../avap.proto');
+    const packageDefinition = protoLoader.loadSync(PROTO_PATH, {
+        keepCase: true, longs: String, enums: String, defaults: true, oneofs: true
+    });
+    const avapProto = grpc.loadPackageDefinition(packageDefinition).avap;
 
-      const msg = { type: 'DATA_UPDATE', data: payload };
-      for (const id in cluster.workers) {
-        cluster.workers[id].send(msg);
-      }
-      
-      const duration = Number(process.hrtime.bigint() - start) / 1e6;
-      log('INFO', 'Definitions Broadcasted', { count: payload.length, duration_ms: duration });
+    const server = new grpc.Server();
 
-    } catch (err) {
-      log('ERROR', 'DB Fetch Failed', { error: err.message });
-    }
-  };
+    // 3. Implementación de Servicios
+    server.addService(avapProto.DefinitionEngine.service, {
+        GetCommand: (call, callback) => {
+            return logic.getCommandLogic(call, callback, API_KEY_BUFFER);
+        },
+        SyncCatalog: (call, callback) => {
+            return logic.syncCatalogLogic(call, callback, API_KEY_BUFFER);
+        }
+    });
 
-  (async () => {
-    try {
-        const client = await pool.connect();
-        await client.query("SELECT 1");
-        client.release();
-    } catch (e) {
-        log('FATAL', 'DB Connection Failed'); process.exit(1);
-    }
+    // 4. Health Check
+    const statusMap = { "avap.DefinitionEngine": "SERVING", "": "SERVING" };
+    const healthImpl = new HealthImplementation(statusMap);
+    healthImpl.addToServer(server);
 
-    for (let i = 0; i < numCPUs; i++) cluster.fork();
-
-    await broadcastData();
-    setInterval(broadcastData, REFRESH_INTERVAL_MS);
-  })();
-
-  cluster.on('exit', (worker) => {
-    log('WARN', 'Worker died. Respawning.', { dead_pid: worker.process.pid });
-    cluster.fork();
-    setTimeout(broadcastData, 2000);
-  });
-
-} else {
-  // --- 2. WORKER LOGIC ---
-
-  let catalog = new Map();
-  // Health Check Status Map
-  const statusMap = {
-    "avap.DefinitionEngine": "NOT_SERVING", // Start as not ready
-    "": "NOT_SERVING"
-  };
-  const healthImpl = new HealthImplementation(statusMap);
-
-  // --- IPC DATA SYNC ---
-  process.on('message', (msg) => {
-    if (msg.type === 'DATA_UPDATE') {
-      const newCatalog = new Map();
-      for (let i = 0; i < msg.data.length; i++) {
-        const item = msg.data[i];
-        const codeBuf = Buffer.isBuffer(item.c) ? item.c : Buffer.from(item.c);
-        newCatalog.set(item.n, {
-            name: item.n,
-            hash: 'v1',
-            code: codeBuf
-        });
-      }
-      catalog = newCatalog;
-      
-      // Mark as Healthy (SERVING) only after data is loaded
-      statusMap["avap.DefinitionEngine"] = "SERVING";
-      statusMap[""] = "SERVING";
-      healthImpl.setStatus("avap.DefinitionEngine", "SERVING");
-    }
-  });
-
-  // --- gRPC SERVER ---
-  const PROTO_PATH = path.join(__dirname, '../avap.proto');
-  const packageDefinition = protoLoader.loadSync(PROTO_PATH, {
-    keepCase: true, longs: String, enums: String, defaults: true, oneofs: true
-  });
-  const avapProto = grpc.loadPackageDefinition(packageDefinition).avap;
-  
-  const getCommandImpl = (call, callback) => {
-        return getCommandLogic(call, callback, catalog, API_KEY_BUFFER);
-  };
-
-  const server = new grpc.Server({
-      'grpc.max_concurrent_streams': 1000,
-  });
-
-  // A. Add Main Service
-  server.addService(avapProto.DefinitionEngine.service, {
-    GetCommand: getCommandImpl
-  });
-
-  // B. Add Health Check Service (STANDARD 1)
-  // This allows AWS/K8s to check health via gRPC
-  healthImpl.addToServer(server);
-
-  const bindAddr = `0.0.0.0:${PORT}`;
-  server.bindAsync(bindAddr, grpc.ServerCredentials.createInsecure(), (err, port) => {
-    if (err) {
-        log('FATAL', 'Bind Failed', { error: err.message });
-        return;
-    }
-    
-    // Warmup
-    const dummyCall = { 
-        request: { name: 'warmup' }, 
-        metadata: { internalRepr: new Map([['x-avap-auth', [API_KEY_BUFFER]]]) } 
-    };
-    const dummyCb = () => {};
-    for(let i=0; i<5000; i++) getCommandImpl(dummyCall, dummyCb);
-    
-    if (global.gc) global.gc();
-
-    // log('INFO', 'Worker Listening', { pid: process.pid });
-  });
+    // 5. Bind & Start
+    const bindAddr = `0.0.0.0:${PORT}`;
+    server.bindAsync(bindAddr, grpc.ServerCredentials.createInsecure(), (err, port) => {
+        if (err) {
+            log('FATAL', 'Bind Failed', { error: err.message });
+            process.exit(1);
+        }
+        log('INFO', `🚀 AVAP Engine running on ${bindAddr}`);
+    });
 }
+
+// Arrancar
+startServer().catch(err => {
+    log('FATAL', 'Startup Error', { error: err.message });
+    process.exit(1);
+});
