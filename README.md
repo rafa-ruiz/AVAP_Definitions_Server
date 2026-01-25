@@ -1,4 +1,4 @@
-# AVAP Core: Definition Engine
+# AVAP Definitions Server
 
 [![CI Pipeline](https://github.com/rafa-ruiz/AVAP_Definitions_Server/actions/workflows/ci.yml/badge.svg)](https://github.com/rafa-ruiz/AVAP_Definitions_Server/actions/workflows/ci.yml)
 ![Benchmark](https://img.shields.io/badge/Performance-%3E5000_RPS-brightgreen?style=flat&logo=speedtest)
