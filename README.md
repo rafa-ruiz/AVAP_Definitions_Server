@@ -10,7 +10,7 @@
 ![Stack](https://img.shields.io/badge/stack-Node.js_gRPC-green)
 ![License](https://img.shields.io/badge/license-Proprietary-red)
 
-The **AVAP Definition Engine** is the central intelligence unit of the AVAP ecosystem. It acts as the high-performance authoritative server responsible for managing, securing, and serving command logic (`obex_dapl_functions`) to distributed execution nodes via **gRPC**.
+The **AVAP Definition Server** is the central intelligence unit of the AVAP ecosystem. It acts as the high-performance authoritative server responsible for managing, securing, and serving command logic (`obex_dapl_functions`) to distributed execution nodes via **gRPC**.
 
 Designed for **Enterprise Scale**, it decouples data persistence from execution, ensuring that no external runtime ever accesses the database directly.
 
@@ -33,7 +33,7 @@ We maintain strict documentation standards. Please refer to the specific guides 
 
 ## Architecture Role
 
-This service implements the **"Brain"** pattern in our decoupled architecture. It is the sole guardian of the intellectual property stored in the database.
+This service implements the **"Definition Server"** pattern in our decoupled architecture. It is the sole guardian of the intellectual property stored in the database.
 
 ```mermaid
 graph LR

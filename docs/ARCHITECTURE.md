@@ -40,26 +40,36 @@ The system uses an asynchronous **Master-Push** model.
 ```mermaid
 sequenceDiagram
     participant DB as PostgreSQL (Legacy)
-    participant M as Cluster Master
-    participant W as Worker (CPU Core)
-    participant C as Python Client
+    participant M as AVAP Definition Server (Control)
+    participant W as RAM Cache (Data Plane)
+    participant C as AVAP Language Server
 
-    Note over M, DB: 1. Hydration Phase (Control Plane)
+    Note over M, DB: 1. Hydration Phase (At Startup)
     M->>DB: SELECT * FROM obex_dapl_functions
-    DB-->>M: Return Dataset
-    M->>M: Serialize & Optimize Payload
-    M->>W: IPC Message (DATA_UPDATE)
-    W->>W: Atomic RAM Swap (New Catalog)
+    DB-->>M: Dataset (Raw SQL Rows)
+    M->>M: Transform to Optimized Buffers
+    M->>W: Atomic RAM Write (Map.set)
 
-    Note over W: Worker is now HEALTHY
+    Note over W: Engine is now READY
 
-    Note over C, W: 2. Execution Phase (Data Plane)
-    C->>W: gRPC GetCommand(name="addVar")
-    W->>W: O(1) HashMap Lookup
-    W-->>C: Return Python Source Code
+    Note over C, W: 2. Execution Phase (Real-time)
     
-    Note over M, DB: 3. Background Sync (Every 60s)
-    loop Refresh Cycle
-        M->>DB: Poll for changes
-        M->>W: Broadcast Updates
+    rect rgb(240, 240, 240)
+        Note right of C: Scenario A: Atomic Lookup
+        C->>W: gRPC GetCommand(name="if")
+        W->>W: O(1) Hash Map Seek
+        W-->>C: Binary Definition (Proto)
+    end
+
+    rect rgb(220, 235, 255)
+        Note right of C: Scenario B: Full Sync
+        C->>W: gRPC SyncCatalog(Empty)
+        W->>W: Map.values() Iterator
+        W-->>C: Repeated CommandResponse (Bulk)
+    end
+    
+    Note over M, DB: 3. Background Refresh (Optional)
+    loop Every 60 seconds
+        M->>DB: Poll for schema changes
+        M-->>W: Update RAM if needed
     end
