@@ -24,10 +24,10 @@ We maintain strict documentation standards. Please refer to the specific guides 
 
 | Document | Description | Target Audience |
 | :--- | :--- | :--- |
-| [** Architecture**](./docs/ARCHITECTURE.md) | Zero-IO design, Split-Plane pattern, and Data Flow diagrams. | Architects, Leads |
-| [** Performance**](./docs/PERFORMANCE.md) | Benchmarks (37k RPS), Memory Management, and Optimization flags. | SRE, DevOps |
-| [** Security**](./docs/SECURITY.md) | Zero-Trust implementation, DB Isolation, and Auth protocols. | Security, Compliance |
-| [** Production**](./docs/PRODUCTION.md) | Kubernetes/Docker deployment, CI/CD pipelines, and Operational manuals. | DevOps, SysAdmins |
+| [**Architecture**](./docs/ARCHITECTURE.md) | Zero-IO design, Split-Plane pattern, and Data Flow diagrams. | Architects, Leads |
+| [**Performance**](./docs/PERFORMANCE.md) | Benchmarks (37k RPS), Memory Management, and Optimization flags. | SRE, DevOps |
+| [**Security**](./docs/SECURITY.md) | Zero-Trust implementation, DB Isolation, and Auth protocols. | Security, Compliance |
+| [**Production**](./docs/PRODUCTION.md) | Kubernetes/Docker deployment, CI/CD pipelines, and Operational manuals. | DevOps, SysAdmins |
 
 ---
 
@@ -37,7 +37,7 @@ This service implements the **"Brain"** pattern in our decoupled architecture. I
 
 ```mermaid
 graph LR
-    ExecNodes[External Language Servers\n(The Muscle)] -->|gRPC/Protobuf| Core[Definition Engine\n(The Brain)];
+    ExecNodes["External Language Servers<br/>(The Muscle)"] -->|gRPC/Protobuf| Core["Definition Engine<br/>(The Brain)"];
     Core -->|RAM Access (Nano-latency)| CoreMem[In-Memory Catalog];
     Core -.->|Async Sync| DB[(PostgreSQL)];
 ```
