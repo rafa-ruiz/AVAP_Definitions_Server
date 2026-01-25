@@ -37,7 +37,7 @@ This service implements the **"Brain"** pattern in our decoupled architecture. I
 
 ```mermaid
 graph LR
-    ExecNodes["External Language Servers<br/>(The Muscle)"] -->|"gRPC/Protobuf"| Core["Definition Engine<br/>(The Brain)"];
+    ExecNodes["AVAP Language Servers<br/>"] -->|"gRPC/Protobuf"| Core["AVAP Definition Server<br/>"];
     Core -->|"RAM Access (Nano-latency)"| CoreMem[In-Memory Catalog];
     Core -.->|"Async Sync"| DB[(PostgreSQL)];
 ```
