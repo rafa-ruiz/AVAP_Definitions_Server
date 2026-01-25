@@ -1,4 +1,4 @@
-# AVAP Definition Engine | Architecture Reference (v4.0)
+# AVAP Definition Server | Architecture Reference (v1.0)
 
 > **Version:** 0.0.1
 > **Protocol:** gRPC / HTTP/2
@@ -7,7 +7,7 @@
 
 ## 1. Executive Summary
 
-The AVAP Definition Engine is the high-performance **Single Source of Truth (SSOT)** for the platform's execution logic. Unlike traditional web services, this engine operates as a **Pure In-Memory Computing Cluster**.
+The AVAP Definition Server is the high-performance **Single Source of Truth (SSOT)** for the platform's execution logic. Unlike traditional web services, this engine operates as a **Pure In-Memory Computing Cluster**.
 
 It abstracts the persistence layer (PostgreSQL) from the execution layer (Python Interpreters), ensuring that database latency or locks never impact the runtime speed of the language. The system is engineered to serve Python logic definitions with **microsecond latency**.
 
