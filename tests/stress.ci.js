@@ -2,7 +2,7 @@ const grpc = require('@grpc/grpc-js');
 const protoLoader = require('@grpc/proto-loader');
 const path = require('path');
 
-// --- ⚙️ CONFIGURATION ---
+// --- CONFIGURATION ---
 // Default to 50051 (Node Native) or 50052 (Docker External)
 const PORT = process.env.PORT || '50051'; 
 const HOST = process.env.HOST || 'localhost';
@@ -13,41 +13,41 @@ const REQUEST_TIMEOUT_MS = 1000; // 1 second max per request
 const GLOBAL_TIMEOUT_MS = 15000; // 15 seconds max for whole test
 
 console.log('\n==========================================');
-console.log('🔥 AVAP SMOKE STRESS TEST | CI MODE');
+console.log('SMOKE STRESS TEST | CI MODE');
 console.log('==========================================');
-console.log(`🎯 Target:       ${SERVER_ADDR}`);
-console.log(`📉 Concurrency:  ${CONCURRENCY} threads`);
-console.log(`🔢 Total Reqs:   ${TOTAL_REQUESTS}`);
+console.log(`Target:       ${SERVER_ADDR}`);
+console.log(`Concurrency:  ${CONCURRENCY} threads`);
+console.log(`Total Reqs:   ${TOTAL_REQUESTS}`);
 console.log('------------------------------------------');
 
-// --- 📦 PROTO SETUP ---
+// ---  PROTO SETUP ---
 const PROTO_PATH = path.join(__dirname, '../avap.proto');
 const packageDefinition = protoLoader.loadSync(PROTO_PATH, {
     keepCase: true, defaults: true, oneofs: true
 });
 const avap_proto = grpc.loadPackageDefinition(packageDefinition).avap;
 
-// --- 🔌 CLIENT SETUP ---
+// ---  CLIENT SETUP ---
 const client = new avap_proto.DefinitionEngine(SERVER_ADDR, grpc.credentials.createInsecure());
 const meta = new grpc.Metadata();
 meta.add('x-avap-auth', 'avap_secret_key_2026');
 
-// --- 📊 STATE ---
+// ---  STATE ---
 let completed = 0;
 let success = 0;
 let failed = 0;
 const errorsDetails = {}; // To aggregate error types
 const startTime = Date.now();
 
-// --- 💣 SAFETY NET (GLOBAL TIMEOUT) ---
+// --- SAFETY NET (GLOBAL TIMEOUT) ---
 // If the test hangs for any reason, this kills the process
 const globalTimeout = setTimeout(() => {
-    console.error('\n❌ CRITICAL: Global Timeout Exceeded!');
+    console.error('\nCRITICAL: Global Timeout Exceeded!');
     console.error(`   The test took longer than ${GLOBAL_TIMEOUT_MS/1000}s. process hanging.`);
     process.exit(1);
 }, GLOBAL_TIMEOUT_MS);
 
-// --- 🚀 EXECUTION LOOP ---
+// --- EXECUTION LOOP ---
 
 function makeRequest() {
     if (completed >= TOTAL_REQUESTS) return;
@@ -90,7 +90,7 @@ function makeRequest() {
     });
 }
 
-// --- 🏁 TEARDOWN ---
+// --- TEARDOWN ---
 
 function finish() {
     clearTimeout(globalTimeout); // Disarm safety net
@@ -98,17 +98,17 @@ function finish() {
     const rps = TOTAL_REQUESTS / duration;
 
     console.log('\n\n==========================================');
-    console.log('📊 TEST REPORT');
+    console.log('TEST REPORT');
     console.log('==========================================');
-    console.log(`⏱️  Duration:     ${duration.toFixed(3)}s`);
-    console.log(`🚀 Throughput:   ${rps.toFixed(2)} Req/Sec`);
+    console.log(` Duration:     ${duration.toFixed(3)}s`);
+    console.log(` Throughput:   ${rps.toFixed(2)} Req/Sec`);
     console.log('------------------------------------------');
-    console.log(`✅ Success:      ${success}`);
-    console.log(`❌ Failed:       ${failed}`);
+    console.log(`Success:      ${success}`);
+    console.log(`Failed:       ${failed}`);
 
     // Print Error Details if any
     if (failed > 0) {
-        console.log('\n⚠️  ERROR BREAKDOWN:');
+        console.log('\n  ERROR BREAKDOWN:');
         Object.keys(errorsDetails).forEach(code => {
             console.log(`   - Error Code [${code}]: ${errorsDetails[code]} occurrences`);
         });
@@ -120,17 +120,17 @@ function finish() {
     client.close();
 
     if (failed > 0) {
-        console.error('❌ FAILURE: System produced errors under load.');
+        console.error('FAILURE: System produced errors under load.');
         process.exit(1);
     } else {
-        console.log('✅ PASSED: System is stable.');
+        console.log('PASSED: System is stable.');
         process.exit(0);
     }
 }
 
-// --- ▶️ STARTUP SEQUENCE ---
+// --- STARTUP SEQUENCE ---
 
-console.log('⏳ Handshaking with server...');
+console.log('Handshaking with server...');
 
 // Wait up to 2 seconds for the server to be available
 const deadline = new Date();
@@ -138,7 +138,7 @@ deadline.setSeconds(deadline.getSeconds() + 2);
 
 client.waitForReady(deadline, (err) => {
     if (err) {
-        console.error('\n❌ FATAL: Could not connect to server.');
+        console.error('\nFATAL: Could not connect to server.');
         console.error('   Possible reasons:');
         console.error('   1. Server is not running.');
         console.error(`   2. Wrong Port (Trying ${SERVER_ADDR}).`);

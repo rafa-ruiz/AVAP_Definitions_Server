@@ -15,7 +15,7 @@ jest.mock('../src/db', () => ({
     })
 }));
 
-describe('🧠 AVAP Logic Engine (Unit Tests)', () => {
+describe('AVAP Logic Engine (Unit Tests)', () => {
     
     const API_KEY_BUFFER = Buffer.from('avap_secret_key_2026');
 
@@ -24,7 +24,7 @@ describe('🧠 AVAP Logic Engine (Unit Tests)', () => {
         await logic.loadDefinitions();
     });
 
-    test('⛔ Should block access without Token', (done) => {
+    test('Should block access without Token', (done) => {
         const mockCall = {
             request: { name: 'if' },
             metadata: {
@@ -42,7 +42,7 @@ describe('🧠 AVAP Logic Engine (Unit Tests)', () => {
         logic.getCommandLogic(mockCall, callback, API_KEY_BUFFER);
     });
 
-    test('⛔ Should block access with Invalid Token', (done) => {
+    test('Should block access with Invalid Token', (done) => {
         const mockCall = {
             request: { name: 'if' },
             metadata: {
@@ -59,7 +59,7 @@ describe('🧠 AVAP Logic Engine (Unit Tests)', () => {
         logic.getCommandLogic(mockCall, callback, API_KEY_BUFFER);
     });
 
-    test('✅ Should allow access with Correct Token', (done) => {
+    test('Should allow access with Correct Token', (done) => {
         const mockCall = {
             request: { name: 'if' },
             metadata: {
@@ -76,7 +76,7 @@ describe('🧠 AVAP Logic Engine (Unit Tests)', () => {
         logic.getCommandLogic(mockCall, callback, API_KEY_BUFFER);
     });
 
-    test('✅ Should return code if command exists (Cache Hit)', (done) => {
+    test('Should return code if command exists (Cache Hit)', (done) => {
         const mockCall = {
             request: { name: 'if' },
             metadata: {
@@ -94,7 +94,7 @@ describe('🧠 AVAP Logic Engine (Unit Tests)', () => {
         logic.getCommandLogic(mockCall, callback, API_KEY_BUFFER);
     });
 
-    test('🔍 Should return 404 if command does NOT exist', (done) => {
+    test('Should return 404 if command does NOT exist', (done) => {
         const mockCall = {
             request: { name: 'non_existent_command' },
             metadata: {

@@ -18,20 +18,20 @@ Repository: [https://github.com/rafa-ruiz/AVAP_Definitions_Server](https://githu
 
 ---
 
-## 📚 System Documentation
+## System Documentation
 
 We maintain strict documentation standards. Please refer to the specific guides below for deep dives:
 
 | Document | Description | Target Audience |
 | :--- | :--- | :--- |
-| [**🏗️ Architecture**](./docs/ARCHITECTURE.md) | Zero-IO design, Split-Plane pattern, and Data Flow diagrams. | Architects, Leads |
-| [**🚀 Performance**](./docs/PERFORMANCE.md) | Benchmarks (37k RPS), Memory Management, and Optimization flags. | SRE, DevOps |
-| [**🛡️ Security**](./docs/SECURITY.md) | Zero-Trust implementation, DB Isolation, and Auth protocols. | Security, Compliance |
-| [**🚢 Production**](./docs/PRODUCTION.md) | Kubernetes/Docker deployment, CI/CD pipelines, and Operational manuals. | DevOps, SysAdmins |
+| [** Architecture**](./docs/ARCHITECTURE.md) | Zero-IO design, Split-Plane pattern, and Data Flow diagrams. | Architects, Leads |
+| [** Performance**](./docs/PERFORMANCE.md) | Benchmarks (37k RPS), Memory Management, and Optimization flags. | SRE, DevOps |
+| [** Security**](./docs/SECURITY.md) | Zero-Trust implementation, DB Isolation, and Auth protocols. | Security, Compliance |
+| [** Production**](./docs/PRODUCTION.md) | Kubernetes/Docker deployment, CI/CD pipelines, and Operational manuals. | DevOps, SysAdmins |
 
 ---
 
-## 🏗️ Architecture Role
+## Architecture Role
 
 This service implements the **"Brain"** pattern in our decoupled architecture. It is the sole guardian of the intellectual property stored in the database.
 
@@ -50,7 +50,7 @@ graph LR
 
 ---
 
-## 🚀 Performance Features
+## Performance Features
 
 * **Zero-Copy Networking**: Leveraging pure gRPC buffers to minimize CPU cycles.
 * **In-Memory Architecture**: The entire catalog resides in RAM, eliminating Database I/O for read operations.
@@ -59,7 +59,7 @@ graph LR
 
 ---
 
-## 🛠️ Getting Started
+## Getting Started
 
 ### Prerequisites
 * **Node.js 22+**
@@ -87,7 +87,7 @@ graph LR
 
 ---
 
-## 🔐 Security Standards
+## Security Standards
 
 This repository adheres to **Tier-1 Security Protocols**:
 * **Isolation**: This service is the *only* entity with database credentials.
@@ -98,6 +98,6 @@ For deep architectural details, see [ARCHITECTURE.md](./docs/ARCHITECTURE.md).
 
 ---
 
-## 📄 License
+## License
 
 Proprietary Software. Unauthorized access, distribution, or copying is strictly prohibited.

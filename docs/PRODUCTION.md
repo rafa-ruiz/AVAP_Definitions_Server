@@ -1,4 +1,4 @@
-# 🏭 AVAP Definition Engine | Production Operations Guide
+# AVAP Definition Engine | Production Operations Guide
 
 > **Version:** 4.0.0 (Stable)
 > **Runtime:** Node.js v18+ (Cluster Mode)
@@ -14,7 +14,7 @@ This service operates on a **Split-Plane Architecture** designed for zero-latenc
 * **Control Plane (Master Process):** Handles PostgreSQL synchronization (`obex_dapl_functions`), IPC broadcasting, and process lifecycle.
 * **Data Plane (Worker Processes):** Pure computation nodes. They hold **zero database connections** and serve requests exclusively from RAM.
 
-### ⚠️ Critical Operational Constraint
+### Critical Operational Constraint
 **Do not** attempt to scale this service by increasing `DATABASE_POOL_SIZE`. The workers do not use the DB. To scale throughput (RPS), you must scale **CPU Cores**.
 
 ---
@@ -25,11 +25,11 @@ The following variables must be injected via Kubernetes Secrets or Docker Envs.
 
 | Variable | Required | Default | Description |
 | :--- | :---: | :--- | :--- |
-| `DATABASE_URL` | ✅ | - | PostgreSQL Connection String (Read-Only user recommended). |
-| `API_KEY` | ✅ | - | High-entropy string for inter-service gRPC authentication. |
-| `PORT` | ❌ | `50051` | The gRPC listening port. |
-| `UV_THREADPOOL_SIZE`| ❌ | `64` | **Tuning:** Increases libuv threads for heavy crypto operations. |
-| `NODE_ENV` | ❌ | `production`| Disables dev-mode stack traces and logging overhead. |
+| `DATABASE_URL` | yes | - | PostgreSQL Connection String (Read-Only user recommended). |
+| `API_KEY` | yesz | - | High-entropy string for inter-service gRPC authentication. |
+| `PORT` | no | `50051` | The gRPC listening port. |
+| `UV_THREADPOOL_SIZE`| no | `64` | **Tuning:** Increases libuv threads for heavy crypto operations. |
+| `NODE_ENV` | no | `production`| Disables dev-mode stack traces and logging overhead. |
 
 ---
 
@@ -69,7 +69,7 @@ Kubernetes must treat these Pods as critical. You **must** set `requests` equal 
         memory: "5Gi"
         cpu: "4000m"
 
-### 🧮 The Memory Math (Avoid OOMKilled)
+### The Memory Math (Avoid OOMKilled)
 * **V8 Heap Limit:** 4096 MB (configured via flags).
 * **Overhead Buffer:** ~1024 MB (Required for Off-Heap Buffers, C++ bindings, and OS kernel structures).
 * **Pod Limit:** 5 GiB (5120 MB).

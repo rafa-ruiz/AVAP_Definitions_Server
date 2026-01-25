@@ -3,22 +3,22 @@ const protoLoader = require('@grpc/proto-loader');
 const path = require('path');
 const { performance } = require('perf_hooks');
 
-// --- CONFIGURACIÓN DE ESCENARIO LIMPIO ---
+// CONFIGURAION
 const CONFIG = {
   server: '127.0.0.1:50052',
   protoPath: path.join(__dirname, '../avap.proto'),
   apiKey: 'avap_secret_key_2026',
-  concurrency: 500,      // Usuarios simultáneos
-  totalRequests: 10000,   // Duración de la prueba
+  concurrency: 500,      // Users at same time
+  totalRequests: 10000,   // Test Length
   
-  // PERFIL DE TRÁFICO
+  // TRAFFIC PROFILE
   trafficProfile: {
-    hot: 0.80,   // 80% Piden 'if' (Cache Hit asegurado)
-    cold: 0.20   // 20% Piden basura aleatoria (Cache Miss -> DB Access)
+    hot: 0.80,   // 80% Success
+    cold: 0.20   // 20% Not found command
   }
 };
 
-// --- INICIALIZACIÓN ---
+// Initialization
 const packageDefinition = protoLoader.loadSync(CONFIG.protoPath, {
   keepCase: true, longs: String, enums: String, defaults: true, oneofs: true
 });
@@ -30,25 +30,25 @@ const client = new avapProto.DefinitionEngine(
   { 'grpc.enable_http_proxy': 0 }
 );
 
-// --- GENERADOR DE TRÁFICO ---
+// Traffic generator
 function getNextCommand() {
   const rand = Math.random();
   
-  // ESCENARIO 1: HOT DATA (Memoria)
-  // Pedimos 'if' porque sabemos que tu DB lo tiene y estará en caché.
+  // SCENARIO 1: HOT DATA (Memory)
+  // We use 'if' because we know your DB has it and it will be in the cache.
   if (rand < CONFIG.trafficProfile.hot) {
     return { 
       name: 'if', 
-      type: '🔥 HOT (Cache Hit)' 
+      type: 'HOT (Cache Hit)' 
     };
   }
   
-  // ESCENARIO 2: COLD/MISS (DB Access)
-  // Pedimos algo aleatorio. Obliga al servidor a consultar Postgres.
-  // A efectos de carga de CPU/IO, buscar y no encontrar es casi igual que buscar y encontrar.
+  // SCENARIO 2: COLD/MISS (DB Access)
+  // We request something random. This forces the server to query Postgres.
+  // In terms of CPU/IO load, searching and not finding is almost the same as searching and finding.
   return { 
     name: `stress_test_${Math.random().toString(36).substring(7)}`, 
-    type: '❄️ COLD (DB Access)' 
+    type: 'COLD (DB Access)' 
   };
 }
 
@@ -61,7 +61,7 @@ const makeRequest = (cmdInfo) => {
     const start = performance.now();
     client.GetCommand({ name: cmdInfo.name }, metadata, (err, response) => {
       const duration = performance.now() - start;
-      // Consideramos éxito si responde OK o NOT_FOUND (ambos son respuestas válidas del sistema)
+      // We consider it a success if it responds with OK or NOT_FOUND (both are valid system responses)
       const isSuccess = !err || err.code === 5; 
       
       resolve({ 
@@ -73,13 +73,13 @@ const makeRequest = (cmdInfo) => {
   });
 };
 
-// --- EJECUCIÓN ---
+// EXETUCION
 async function runRealWorldTest() {
   console.clear();
-  console.log(`🌍 AVAP | REAL-WORLD SIMULATION (CLEAN DB)`);
+  console.log(`AVAP | REAL-WORLD SIMULATION (CLEAN DB)`);
   console.log(`==========================================`);
-  console.log(`👥 Concurrency: ${CONFIG.concurrency} threads`);
-  console.log(`📊 Profile: ${CONFIG.trafficProfile.hot*100}% Cache Hits | ${CONFIG.trafficProfile.cold*100}% DB Accesses`);
+  console.log(`Concurrency: ${CONFIG.concurrency} threads`);
+  console.log(`Profile: ${CONFIG.trafficProfile.hot*100}% Cache Hits | ${CONFIG.trafficProfile.cold*100}% DB Accesses`);
   console.log(`------------------------------------------\n`);
 
   const results = [];
@@ -95,7 +95,7 @@ async function runRealWorldTest() {
     }
     const batchResults = await Promise.all(promises);
     results.push(...batchResults);
-    process.stdout.write(`\r⏳ Running simulation... ${(results.length / CONFIG.totalRequests * 100).toFixed(0)}%`);
+    process.stdout.write(`\rRunning simulation... ${(results.length / CONFIG.totalRequests * 100).toFixed(0)}%`);
   }
 
   const totalTime = performance.now() - startTime;
@@ -112,33 +112,33 @@ async function runRealWorldTest() {
     return { avg, p95, count: subset.length };
   };
 
-  const hotStats = analyzeType('🔥 HOT (Cache Hit)');
-  const coldStats = analyzeType('❄️ COLD (DB Access)');
+  const hotStats = analyzeType('HOT (Cache Hit)');
+  const coldStats = analyzeType('COLD (DB Access)');
 
-  console.log(`\n\n✅ RESULTS:\n`);
+  console.log(`\n\nRESULTS:\n`);
   
   console.table({
     'Metric': ['Throughput (RPS)', 'Global P95 Latency'],
-    'Result': [`${rps} req/sec`, `${analyzeType('🔥 HOT (Cache Hit)').p95.toFixed(2)} ms (Ref)`]
+    'Result': [`${rps} req/sec`, `${analyzeType('HOT (Cache Hit)').p95.toFixed(2)} ms (Ref)`]
   });
 
-  console.log(`\n🔍 LATENCY BREAKDOWN (Cache vs Database):`);
+  console.log(`\nLATENCY BREAKDOWN (Cache vs Database):`);
   console.table([
     { 
-      'Scenario': '🔥 RAM (Cache Hit)', 
+      'Scenario': 'RAM (Cache Hit)', 
       'Requests': hotStats.count, 
       'Avg Time': `${hotStats.avg.toFixed(2)} ms`, 
       'P95 Time': `${hotStats.p95.toFixed(2)} ms`,
     },
     { 
-      'Scenario': '❄️ DISK (DB Access)', 
+      'Scenario': 'DISK (DB Access)', 
       'Requests': coldStats.count, 
       'Avg Time': `${coldStats.avg.toFixed(2)} ms`, 
       'P95 Time': `${coldStats.p95.toFixed(2)} ms`,
     }
   ]);
 
-  console.log(`\n💡 SRE NOTE:`);
+  console.log(`\nSRE NOTE:`);
   console.log(`The 'COLD' latency represents the true penalty of a Cache Miss.`);
   console.log(`Difference: DB Access is ${(coldStats.avg / hotStats.avg).toFixed(1)}x slower than RAM access.`);
   

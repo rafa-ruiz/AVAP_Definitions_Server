@@ -1,4 +1,4 @@
-# 🚀 AVAP Definition Engine: Performance Landscape
+# AVAP Definition Engine: Performance Landscape
 
 > **Status:** Production Ready
 > **Last Benchmark:** Jan 2026
@@ -8,7 +8,7 @@ This document serves as the authoritative performance report for the Definition 
 
 ---
 
-## 🏆 Executive Summary
+## Executive Summary
 
 The engine is architected to be **faster than the clients consuming it**.
 
@@ -21,7 +21,7 @@ The engine is architected to be **faster than the clients consuming it**.
 
 ---
 
-## 📊 Benchmark Breakdown
+## Benchmark Breakdown
 
 We measure performance in two distinct scenarios to identify true system bottlenecks.
 
@@ -38,7 +38,7 @@ We measure performance in two distinct scenarios to identify true system bottlen
 
 ---
 
-## 🏗️ Architectural Decisions
+## Architectural Decisions
 
 ### 1. Single-Process vs. Cluster Mode
 In early development, we achieved **36k RPS** using Node.js Clustering (Multi-Process). However, we migrated to a **Single-Process Architecture** (`13k RPS`).
@@ -68,7 +68,7 @@ graph TD
 
 ---
 
-## 📦 Feature Performance
+## Feature Performance
 
 ### `GetCommand` (High Frequency)
 * **Usage:** Runtime lookup of single commands.
@@ -82,7 +82,7 @@ graph TD
 
 ---
 
-## 🧪 Reproducing Results
+## Reproducing Results
 
 You can verify these numbers on your local hardware using the included benchmark suite:
 

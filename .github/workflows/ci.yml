@@ -7,7 +7,6 @@ on:
     branches: [ "main" ]
 
 jobs:
-  # --- STEP 1: INTEGRIDAD ---
   integrity:
     name: "STEP 1: Functional Integrity"
     runs-on: ubuntu-latest
@@ -34,7 +33,6 @@ jobs:
           PGPASSWORD=avap_password psql -h localhost -U avap_user -d avap_db -f init.sql
           npm test
 
-  # --- STEP 2: PERFORMANCE ---
   performance:
     name: "STEP 2: Performance & Budget"
     needs: integrity
@@ -77,7 +75,6 @@ jobs:
           sed -i 's/import avap_pb2 as avap__pb2/from . import avap_pb2 as avap__pb2/' app/core/avap_pb2_grpc.py
           PYTHONPATH=. python tests/benchmark_brain.py
 
-  # --- STEP 3: DOCKER BUILD (CORREGIDO) ---
   docker_build:
     name: "STEP 3: Containerize"
     needs: performance
@@ -85,7 +82,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       
-      - name: 🐳 Build Docker Image
+      - name: Build Docker Image
         # Usamos build-push-action con 'load: true' para que la imagen se quede en el host local
         uses: docker/build-push-action@v5
         with:
@@ -93,23 +90,22 @@ jobs:
           tags: avap-engine:latest
           load: true 
           
-      - name: 🔍 Verify Image
+      - name: Verify Image
         run: |
           docker images avap-engine:latest
           docker inspect avap-engine:latest | grep -i version || echo "Image built successfully"
 
-  # --- FINAL STATUS ---
   summary:
-    name: "📊 Pipeline Summary"
+    name: "Pipeline Summary"
     needs: [integrity, performance, docker_build]
     if: always()
     runs-on: ubuntu-latest
     steps:
       - run: |
           echo "===================================================="
-          echo "         AVAP ENGINE STATUS SUMMARY                "
+          echo "      AVAP DEFINITIONS ENGINE STATUS SUMMARY        "
           echo "===================================================="
-          echo " 1. INTEGRITY:  ${{ needs.integrity.result == 'success' && '✅ PASSED' || '❌ FAILED' }}"
-          echo " 2. CAPACITY:   ${{ needs.performance.result == 'success' && '✅ MEASURED' || '❌ FAILED' }}"
-          echo " 3. DOCKER:     ${{ needs.docker_build.result == 'success' && '✅ BUILT' || '❌ FAILED' }}"
+          echo " 1. INTEGRITY:  ${{ needs.integrity.result == 'success' && 'PASSED' || 'FAILED' }}"
+          echo " 2. CAPACITY:   ${{ needs.performance.result == 'success' && 'MEASURED' || 'FAILED' }}"
+          echo " 3. DOCKER:     ${{ needs.docker_build.result == 'success' && 'BUILT' || 'FAILED' }}"
           echo "===================================================="

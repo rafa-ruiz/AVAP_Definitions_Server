@@ -12,12 +12,12 @@ try:
     from app.core import avap_pb2
     from app.core import avap_pb2_grpc
 except ImportError:
-    print("❌ ERROR: Generated Proto files not found.")
+    print("ERROR: Generated Proto files not found.")
     print("   Run: python -m grpc_tools.protoc -Iprotos --python_out=app/core --grpc_python_out=app/core protos/avap.proto")
     sys.exit(1)
 
 def run_test():
-    print("🧠 Connecting to BRAIN (Node.js Definition Engine)...")
+    print("Connecting to BRAIN (Node.js Definition Engine)...")
     
     # Server Address (Docker: localhost:50052, Local: localhost:50051)
     # Adjust depending on how you are running the Node server.
@@ -39,15 +39,15 @@ def run_test():
             response = stub.GetCommand(request, metadata=metadata)
 
             # 6. VALIDATE RESPONSE
-            print("\n✅ RESPONSE RECEIVED!")
+            print("\nRESPONSE RECEIVED!")
             print("-" * 40)
-            print(f"🔹 Hash: {response.hash}")
-            print(f"🔹 Code Length: {len(response.code)} chars")
-            print(f"🔹 Code Preview: {response.code[:50]}...")
+            print(f" Hash: {response.hash}")
+            print(f" Code Length: {len(response.code)} chars")
+            print(f" Code Preview: {response.code[:50]}...")
             print("-" * 40)
 
         except grpc.RpcError as e:
-            print(f"\n❌ gRPC ERROR: {e.code()}")
+            print(f"\n gRPC ERROR: {e.code()}")
             print(f"   Detail: {e.details()}")
 
 if __name__ == '__main__':

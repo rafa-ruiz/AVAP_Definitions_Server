@@ -1,4 +1,4 @@
-# 🏗️ AVAP Definition Engine | Architecture Reference (v4.0)
+# AVAP Definition Engine | Architecture Reference (v4.0)
 
 > **Version:** 0.0.1
 > **Protocol:** gRPC / HTTP/2

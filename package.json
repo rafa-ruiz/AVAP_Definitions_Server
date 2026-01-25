@@ -1,7 +1,7 @@
 {
   "name": "avap-definition-engine",
   "version": "1.0.0",
-  "description": "AVAP gRPC Definition Server (The Brain)",
+  "description": "AVAP Definitions Server",
   "main": "src/server.js",
   "scripts": {
     "start": "node src/server.js",

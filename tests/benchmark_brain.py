@@ -18,7 +18,7 @@ try:
     from app.core import avap_pb2
     from app.core import avap_pb2_grpc
 except ImportError:
-    print("❌ Proto files not found.")
+    print("Proto files not found.")
     sys.exit(1)
 
 def worker_get_command(stub, metadata):
@@ -30,8 +30,8 @@ def worker_get_command(stub, metadata):
         return False, 0
 
 def run_stress_test():
-    print(f"🔥 AVAP ENGINE BENCHMARK | SRE MODE")
-    print(f"🎯 Target: {TARGET} | Threads: {CONCURRENCY}")
+    print(f"AVAP ENGINE BENCHMARK | SRE MODE")
+    print(f"Target: {TARGET} | Threads: {CONCURRENCY}")
     print("=" * 60)
 
     channel = grpc.insecure_channel(target=TARGET)
@@ -39,7 +39,7 @@ def run_stress_test():
     metadata = (('x-avap-auth', AUTH_TOKEN),)
 
     # --- TEST 1: LATENCY & THROUGHPUT ---
-    print(f"🚀 Running High Frequency Test...")
+    print(f"Running High Frequency Test...")
     latencies = []
     start_time = time.time()
     
@@ -58,7 +58,7 @@ def run_stress_test():
     p95_lat = statistics.quantiles(latencies, n=20)[18] # P95
     p99_lat = statistics.quantiles(latencies, n=100)[98] # P99
 
-    print("\n📊 THROUGHPUT & LATENCY RESULTS:")
+    print("\n THROUGHPUT & LATENCY RESULTS:")
     print(f"┌────────────────────┬────────────────────────────┐")
     print(f"│ Metric             │ Result                     │")
     print(f"├────────────────────┼────────────────────────────┤")
@@ -76,14 +76,14 @@ def run_stress_test():
     sync_duration = time.time() - sync_start
     
     mb_processed = (total_bytes / 1024 / 1024)
-    print(f"✅ Sync: {len(resp.commands)} items | {mb_processed:.2f} MB | {sync_duration:.3f}s")
+    print(f" Sync: {len(resp.commands)} items | {mb_processed:.2f} MB | {sync_duration:.3f}s")
 
     channel.close()
 
     # --- PERFORMANCE BUDGET CHECK ---
     print("\n" + "=" * 60)
     if rps < PERFORMANCE_THRESHOLD_RPS:
-        print(f"❌ FAIL: Underperformance detected (< {PERFORMANCE_THRESHOLD_RPS} RPS)")
+        print(f" FAIL: Underperformance detected (< {PERFORMANCE_THRESHOLD_RPS} RPS)")
         sys.exit(1)
     else:
         print(f"✨ PASS: Performance within budget")

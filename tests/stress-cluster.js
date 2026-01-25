@@ -5,7 +5,7 @@ const cluster = require('cluster');
 const os = require('os');
 const { performance } = require('perf_hooks');
 
-// --- CONFIGURATION ---
+// CONFIGURATION
 const CONFIG = {
   server: '127.0.0.1:50052',
   protoPath: path.join(__dirname, '../avap.proto'),
@@ -15,14 +15,14 @@ const CONFIG = {
   clientWorkers: Math.max(2, os.cpus().length / 2) // Use half of available cores for load generation
 };
 
-// --- MASTER PROCESS (The General) ---
+// Main worker
 if (cluster.isPrimary) {
   console.clear();
-  console.log(`💣 AVAP CLUSTER STRESS TEST | CANNON MODE`);
+  console.log(`AVAP CLUSTER STRESS TEST | CANNON MODE`);
   console.log(`=========================================`);
-  console.log(`🎯 Target: ${CONFIG.server}`);
-  console.log(`⚔️  Attackers: ${CONFIG.clientWorkers} Processes x ${CONFIG.concurrencyPerWorker} Threads`);
-  console.log(`⏱️  Duration: ${CONFIG.durationSeconds} seconds`);
+  console.log(`Target: ${CONFIG.server}`);
+  console.log(`Attackers: ${CONFIG.clientWorkers} Processes x ${CONFIG.concurrencyPerWorker} Threads`);
+  console.log(`Duration: ${CONFIG.durationSeconds} seconds`);
   console.log(`-----------------------------------------`);
 
   let totalRequests = 0;
@@ -48,17 +48,17 @@ if (cluster.isPrimary) {
     if (activeWorkers === 0) {
       const rps = (totalRequests / CONFIG.durationSeconds).toFixed(2);
       
-      console.log(`\n🛑 STRESS TEST COMPLETE`);
+      console.log(`\nSTRESS TEST COMPLETE`);
       console.log(`=======================`);
-      console.log(`📊 Total Requests: ${totalRequests.toLocaleString()}`);
-      console.log(`🔥 Errors:         ${totalErrors}`);
-      console.log(`🚀 FINAL THROUGHPUT: ${rps} RPS`);
+      console.log(`Total Requests: ${totalRequests.toLocaleString()}`);
+      console.log(`Errors:         ${totalErrors}`);
+      console.log(`FINAL THROUGHPUT: ${rps} RPS`);
       console.log(`=======================\n`);
     }
   });
 
 } else {
-  // --- WORKER PROCESS (The Soldier) ---
+  // Other workes
   
   const packageDefinition = protoLoader.loadSync(CONFIG.protoPath, {
     keepCase: true, longs: String, enums: String, defaults: true, oneofs: true
@@ -85,25 +85,25 @@ if (cluster.isPrimary) {
 
   const attack = async (clientIndex) => {
     while (keepRunning) {
-      const cmdName = Math.random() > 0.8 ? 'if' : `cmd_${Math.random()}`; // 20% hit, 80% miss (Aggressive)
+      const cmdName = Math.random() > 0.8 ? 'if' : `cmd_${Math.random()}`; // 20% hit, 80% miss
       
       await new Promise(resolve => {
         clients[clientIndex].GetCommand({ name: cmdName }, metadata, (err, response) => {
           requests++;
-          if (err && err.code !== 5) errors++; // 5 is NOT_FOUND, which is fine
+          if (err && err.code !== 5) errors++; // 5 is NOT_FOUND
           resolve();
         });
       });
     }
   };
 
-  // Start Attack Vectors
+  // Start Attack
   const attacks = clients.map((_, index) => attack(index));
 
   // Timer
   setTimeout(() => {
     keepRunning = false;
-    // Wait a bit for pending requests and report
+    // Wait for pending requests and report
     setTimeout(() => {
       process.send({ type: 'RESULTS', requests, errors });
       process.exit(0);

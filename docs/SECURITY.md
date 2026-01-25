@@ -1,4 +1,4 @@
-# 🛡️ Security Policy: AVAP Definition Engine (v4.0)
+#  Security Policy: AVAP Definition Engine (v4.0)
 
 ## 1. Perimeter Defense & Network Isolation
 
@@ -9,10 +9,6 @@ We utilize a **Split-Plane Architecture** to isolate the database from the netwo
 * **Public Traffic:** Handled by Worker processes. These processes have **Zero Network Access** to the Database. Even if a Worker is compromised via Remote Code Execution (RCE), the attacker cannot reach the PostgreSQL database directly from that process context.
 * **Database Traffic:** Handled exclusively by the Master process, which is not exposed to any incoming API traffic.
 
-### Network Placement
-* The service must reside in a **Private Subnet** (VPC Internal).
-* Ingress is restricted strictly to authorized **Execution Nodes** (Python Clients) via Mutual TLS (mTLS) or Security Groups.
-* No Public Internet Access.
 
 ---
 

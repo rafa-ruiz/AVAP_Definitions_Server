@@ -6,10 +6,10 @@ const pool = require('./db');
 const definitionCache = new Map();
 
 /**
- * Carga inicial desde DB
+ * Initial load from DB
  */
 async function loadDefinitions() {
-    console.log("⏳ Loading definitions from DB...");
+    console.log("Loading definitions from DB...");
     try {
         const res = await pool.query('SELECT name, type, interface, code FROM obex_dapl_functions');
         
@@ -25,16 +25,15 @@ async function loadDefinitions() {
                 hash: 'v1'
             });
         });
-        console.log(`✅ Cache warmed up: ${definitionCache.size} definitions.`);
+        console.log(`Cache warmed up: ${definitionCache.size} definitions.`);
     } catch (err) {
-        console.error("❌ Critical Error loading definitions:", err);
+        console.error("Critical Error loading definitions:", err);
         throw err;
     }
 }
 
 /**
- * Helper interno para validación de seguridad
- * Evita el RangeError si las longitudes no coinciden
+ * Security validation
  */
 const isAuthorized = (metadata, apiKeyBuffer) => {
     const authVal = metadata['x-avap-auth'];
@@ -42,8 +41,7 @@ const isAuthorized = (metadata, apiKeyBuffer) => {
 
     const receivedBuffer = Buffer.from(authVal);
     
-    // Si las longitudes son diferentes, timingSafeEqual lanzaría un error.
-    // Retornamos false directamente por seguridad.
+    // return false (error) if lengths are not equals
     if (receivedBuffer.length !== apiKeyBuffer.length) {
         return false;
     }
@@ -52,7 +50,7 @@ const isAuthorized = (metadata, apiKeyBuffer) => {
 };
 
 /**
- * Lógica para obtener un solo comando
+ * Get a command definition
  */
 const getCommandLogic = (call, callback, apiKeyBuffer) => {
     const metadata = call.metadata.getMap();
@@ -84,7 +82,7 @@ const getCommandLogic = (call, callback, apiKeyBuffer) => {
 };
 
 /**
- * Lógica para descargar todo (Sync)
+ * Sync catalog (get all definitions)
  */
 const syncCatalogLogic = (call, callback, apiKeyBuffer) => {
     const metadata = call.metadata.getMap();
@@ -107,7 +105,7 @@ const syncCatalogLogic = (call, callback, apiKeyBuffer) => {
         });
     }
 
-    console.log(`⚡ SYNC: Sending ${commandsList.length} items.`);
+    console.log(`SYNC: Sending ${commandsList.length} items.`);
     
     callback(null, {
         commands: commandsList,
