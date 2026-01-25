@@ -14,8 +14,6 @@ The **AVAP Definition Server** is the central intelligence unit of the AVAP ecos
 
 Designed for **Enterprise Scale**, it decouples data persistence from execution, ensuring that no external runtime ever accesses the database directly.
 
-Repository: [https://github.com/rafa-ruiz/AVAP_Definitions_Server](https://github.com/rafa-ruiz/AVAP_Definitions_Server)
-
 ---
 
 ## System Documentation
