@@ -1,10 +1,10 @@
-# AVAP Definition Engine: Performance Landscape
+# AVAP Definition Server: Performance Landscape
 
 > **Status:** Production Ready
 > **Last Benchmark:** Jan 2026
 > **Architecture:** Single-Process, In-Memory, gRPC
 
-This document serves as the authoritative performance report for the Definition Engine. It details throughput capabilities, latency characteristics, and the architectural trade-offs chosen to balance **Speed vs. Stability**.
+This document serves as the authoritative performance report for the AVAP Definition Server. It details throughput capabilities, latency characteristics, and the architectural trade-offs chosen to balance **Speed vs. Stability**.
 
 ---
 
@@ -55,7 +55,7 @@ We utilize an **Eager Loading** strategy.
 
 ```mermaid
 graph TD
-    Client[Python Client] -- "gRPC (Binary)" --> Server[Node.js Engine];
+    Client[AVAP Language Server] -- "gRPC (Binary)" --> Server[AVAP Definition Server];
     subgraph "Server Memory (RAM)"
         Cache[Hash Map Definitions];
     end

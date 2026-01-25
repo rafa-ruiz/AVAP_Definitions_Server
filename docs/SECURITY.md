@@ -1,4 +1,4 @@
-#  Security Policy: AVAP Definition Engine (v4.0)
+#  Security Policy: AVAP Definition Server (v1.0)
 
 ## 1. Perimeter Defense & Network Isolation
 
