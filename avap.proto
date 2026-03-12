@@ -22,7 +22,7 @@ message CommandResponse {
   string name = 1;
   string type = 2;
   string interface_json = 3;
-  string code = 4;
+  bytes code = 4;
   string hash = 5;
 }
 

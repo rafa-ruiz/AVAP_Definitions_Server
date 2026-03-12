@@ -46,7 +46,7 @@ elif isinstance(raw_value, (int, float)):
 else:
     resolved_value = raw_value
 
-print(f"Setting {target} = {resolved_value}")
+#print(f"Setting {target} = {resolved_value}")
 self.conector.variables[target] = resolved_value
 $body$
 ),
@@ -342,4 +342,135 @@ if param_var_name and isinstance(param_var_name, str):
 self.conector.try_level -= 1
 # self.conector.variables['__last_error__'] = None 
 $body$
-);
+),
+(
+    'randomString',
+    '[{"item":"Pattern","type":"var"},{"item":"Length","type":"var"},{"item":"TargetVariable","type":"var"}]',
+    $body$
+Pattern = task["properties"]["Pattern"]
+Length = task["properties"]["Length"]
+
+if Pattern in self.conector.variables:
+    Pattern = self.conector.variables[Pattern]
+elif Pattern in locals():
+    Pattern = locals()[Pattern]
+
+TargetVariable = task["properties"]["TargetVariable"].strip()
+
+result_string = ""
+for i in range(0, int(Length)):
+    result_string += exrex.getone(Pattern)
+
+self.conector.variables[TargetVariable] = result_string
+$body$
+),
+(
+    'encodeSHA256',
+    '[{"item":"SourceVariable","type":"var"},{"item":"TargetVariable","type":"var"}]',
+    $body$
+from hashlib import sha256
+
+props = task["properties"]
+
+SourceVariable = props.get("SourceVariable") or next(iter(props.values()), None)
+TargetVariable = props.get("TargetVariable") or (list(props.values())[1] if len(props) > 1 else None)
+
+SourceVariable = str(SourceVariable).strip()
+TargetVariable = str(TargetVariable).strip()
+
+if SourceVariable in self.conector.variables:
+    __Var = self.conector.variables[SourceVariable]
+elif SourceVariable in self.conector.local_vars:
+    __Var = self.conector.local_vars[SourceVariable]
+else:
+    __Var = SourceVariable
+
+self.conector.variables[TargetVariable] = sha256(__Var.encode('utf-8')).hexdigest()
+$body$
+),
+(
+    'encodeMD5',
+    '[{"item":"SourceVariable","type":"var"},{"item":"TargetVariable","type":"var"}]',
+    $body$
+import hashlib
+import re
+import os
+
+try:
+    __DEBUG = os.getenv("DEBUG")
+    if __DEBUG == "True": __DEBUG = True
+except:
+    __DEBUG = True
+
+props = task["properties"]
+
+SourceVariable = props.get("SourceVariable") or next(iter(props.values()), None)
+TargetVariable = props.get("TargetVariable") or (list(props.values())[1] if len(props) > 1 else None)
+
+SourceVariable = str(SourceVariable).strip()
+TargetVariable = str(TargetVariable).strip()
+
+try:
+    if SourceVariable.strip()[0] == '`' and SourceVariable.strip()[-1] == '`':
+        SourceVariable = SourceVariable.replace('`', '')
+        __variables_cadena = re.findall('\${([^}]*)}', SourceVariable)
+        for __varia in __variables_cadena:
+            if __varia in self.conector.variables:
+                kert = "${%s}" % __varia
+                SourceVariable = SourceVariable.replace(kert, self.conector.variables[__varia])
+            elif __varia in self.conector.local_vars:
+                kert = "${%s}" % __varia
+                SourceVariable = SourceVariable.replace(kert, self.conector.local_vars[__varia])
+            else:
+                SourceVariable = SourceVariable.replace(kert, '')
+except:
+    pass
+
+if __DEBUG == True: print("[AVAP] MD5 SourceVariable %s" % SourceVariable)
+if __DEBUG == True: print("[AVAP] MD5 TargetVariable %s" % TargetVariable)
+
+encoder = hashlib.md5()
+encoder.update(SourceVariable.encode('utf-8'))
+
+if __DEBUG == True: print("[AVAP] MD5 HexDigest %s" % encoder.hexdigest())
+
+self.conector.variables[TargetVariable] = encoder.hexdigest()
+$body$
+),
+(
+    'replace',
+    '[{"item":"SourceVariable","type":"variable"},{"item":"rePattern","type":"variable"},{"item":"newValue","type":"variable"},{"item":"TargetVariable","type":"variable"}]',
+    $body$
+import re
+
+props = task["properties"]
+
+SourceVariable = props.get("SourceVariable") or next(iter(props.values()), None)
+rePattern      = props.get("rePattern")      or (list(props.values())[1] if len(props) > 1 else None)
+newValue       = props.get("newValue")       or (list(props.values())[2] if len(props) > 2 else None)
+TargetVariable = props.get("TargetVariable") or (list(props.values())[3] if len(props) > 3 else None)
+
+SourceVariable = str(SourceVariable).strip()
+rePattern      = str(rePattern).strip()
+newValue       = str(newValue).strip()
+TargetVariable = str(TargetVariable).strip()
+
+if SourceVariable in self.conector.variables:
+    SourceVariable = self.conector.variables[SourceVariable]
+if rePattern in self.conector.variables:
+    rePattern = self.conector.variables[rePattern]
+if newValue in self.conector.variables:
+    newValue = self.conector.variables[newValue]
+
+patron = r"" + rePattern
+
+try:
+    result = re.sub(patron, newValue, SourceVariable)
+except re.error as e:
+    print(f"[AVAP] replace - Error en el patrón: {e}")
+    result = ""
+
+self.conector.variables[TargetVariable] = result.replace('¨', '"')
+$body$
+)
+;

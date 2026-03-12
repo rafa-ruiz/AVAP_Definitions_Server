@@ -6,29 +6,74 @@ const pool = require('./db');
 const definitionCache = new Map();
 
 /**
- * Initial load from DB
+ * [CTO ARCHITECTURE] - Bytecode Packing Utility
+ * Empaqueta código fuente en el formato binario firmado que espera el LSP.
+ */
+function packForLSP(pythonCode) {
+    const MAGIC = 'AVAP';
+    const VERSION = 1;
+    // Aseguramos que la clave sea un Buffer, igual que b'' en Python
+    const SECRET = Buffer.from('avap_secure_signature_key_2026', 'utf-8');
+    
+    const payload = Buffer.from(pythonCode, 'utf-8');
+    const header = Buffer.alloc(10);
+    
+    // Escribimos el Header en formato Big-Endian
+    header.write(MAGIC, 0, 4, 'ascii');        // Magic (4 bytes)
+    header.writeUInt16BE(VERSION, 4);          // Version (2 bytes)
+    header.writeUInt32BE(payload.length, 6);   // Payload Size (4 bytes)
+
+    // Generar firma HMAC-SHA256 sobre [Header + Payload]
+    const hmac = crypto.createHmac('sha256', SECRET);
+    hmac.update(Buffer.concat([header, payload]));
+    const signature = hmac.digest(); // 32 bytes
+
+    // Estructura final: [Header][Signature][Payload]
+    return Buffer.concat([header, signature, payload]);
+}
+
+/**
+ * Carga con Auto-Compilación integrada
  */
 async function loadDefinitions() {
-    console.log("Loading definitions from DB...");
+    console.log(" [DEF SERVER] Initializing Build Pipeline...");
     try {
-        const res = await pool.query('SELECT name, type, interface, code FROM obex_dapl_functions');
+        const res = await pool.query(`
+            SELECT f.name, f.type, f.interface, f.code as source_code, b.bytecode
+            FROM obex_dapl_functions f
+            LEFT JOIN avap_bytecode b ON f.name = b.command_name
+        `);
         
         definitionCache.clear();
-        res.rows.forEach(row => {
-            const codeBuf = row.code ? Buffer.from(row.code) : Buffer.from("");
+        
+        for (const row of res.rows) {
+            let finalBytecode = row.bytecode;
+
+            // Verificamos si el bytecode ya es un paquete AVAP válido
+            if (!finalBytecode || !finalBytecode.slice(0, 4).equals(Buffer.from('AVAP'))) {
+                console.log(` [BUILD] Packaging: ${row.name}`);
+                finalBytecode = packForLSP(row.source_code || "");
+                
+                // Persistimos para evitar re-empaquetar en el próximo reinicio
+                await pool.query(`
+                    INSERT INTO avap_bytecode (command_name, bytecode, source_hash)
+                    VALUES ($1, $2, $3)
+                    ON CONFLICT (command_name) DO UPDATE SET bytecode = EXCLUDED.bytecode
+                `, [row.name, finalBytecode, crypto.createHash('sha256').update(row.source_code || "").digest('hex')]);
             
+            }
+
             definitionCache.set(row.name, {
                 name: row.name,
                 type: row.type || 'function',
-                interface: row.interface || '[]',
-                code: codeBuf,
-                hash: 'v1'
+                interface_json: row.interface || '[]',
+                code: finalBytecode,
+                hash: 'v-enterprise'
             });
-        });
-        console.log(`Cache warmed up: ${definitionCache.size} definitions.`);
+        }
+        console.log(` [BRAIN] ${definitionCache.size} definitions ready for LSP.`);
     } catch (err) {
-        console.error("Critical Error loading definitions:", err);
-        throw err;
+        console.error("Critical Error in Brain Build Pipeline:", err);
     }
 }
 
@@ -40,12 +85,7 @@ const isAuthorized = (metadata, apiKeyBuffer) => {
     if (!authVal) return false;
 
     const receivedBuffer = Buffer.from(authVal);
-    
-    // return false (error) if lengths are not equals
-    if (receivedBuffer.length !== apiKeyBuffer.length) {
-        return false;
-    }
-
+    if (receivedBuffer.length !== apiKeyBuffer.length) return false;
     return crypto.timingSafeEqual(receivedBuffer, apiKeyBuffer);
 };
 
@@ -54,59 +94,36 @@ const isAuthorized = (metadata, apiKeyBuffer) => {
  */
 const getCommandLogic = (call, callback, apiKeyBuffer) => {
     const metadata = call.metadata.getMap();
-
     if (!isAuthorized(metadata, apiKeyBuffer)) {
-        return callback({
-            code: grpc.status.UNAUTHENTICATED,
-            details: 'Invalid Credentials'
-        });
+        return callback({ code: grpc.status.UNAUTHENTICATED, details: 'Invalid Credentials' });
     }
 
-    const name = call.request.name;
-    const def = definitionCache.get(name);
-
+    const def = definitionCache.get(call.request.name);
     if (def) {
         callback(null, {
             name: def.name,
             type: def.type,
-            interface_json: def.interface,
+            interface_json: def.interface_json,
             code: def.code,
             hash: def.hash
         });
     } else {
-        callback({
-            code: grpc.status.NOT_FOUND,
-            details: `Command '${name}' not found`
-        });
+        callback({ code: grpc.status.NOT_FOUND, details: `Command '${call.request.name}' not found` });
     }
 };
 
 /**
- * Sync catalog (get all definitions)
+ * Sync catalog (Batch fetch for LSP)
  */
 const syncCatalogLogic = (call, callback, apiKeyBuffer) => {
     const metadata = call.metadata.getMap();
-
     if (!isAuthorized(metadata, apiKeyBuffer)) {
-        return callback({
-            code: grpc.status.UNAUTHENTICATED,
-            details: 'Invalid Credentials'
-        });
+        return callback({ code: grpc.status.UNAUTHENTICATED, details: 'Invalid Credentials' });
     }
 
-    const commandsList = [];
-    for (const def of definitionCache.values()) {
-        commandsList.push({
-            name: def.name,
-            type: def.type,
-            interface_json: def.interface,
-            code: def.code,
-            hash: def.hash
-        });
-    }
+    const commandsList = Array.from(definitionCache.values());
+    console.log(`SYNC: Sending ${commandsList.length} items to LSP.`);
 
-    console.log(`SYNC: Sending ${commandsList.length} items.`);
-    
     callback(null, {
         commands: commandsList,
         total_count: commandsList.length,
