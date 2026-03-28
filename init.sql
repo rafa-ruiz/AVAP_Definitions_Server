@@ -99,12 +99,12 @@ for par in self.conector.req.request.query_arguments:
 # Si no se encontró en query, buscar en el body
 if value_param is None:
     try:
-        body_data = json.loads(self.conector.req.body)
+        body_data = json.loads(self.conector.req.request.body)
         if param in body_data:
             value_param = body_data[param]
     except:
         try:
-            body_arguments = self.conector.req.body_arguments
+            body_arguments = self.conector.req.request.body_arguments
             if param in body_arguments:
                 value_param = body_arguments[param][0]
         except:
@@ -144,20 +144,30 @@ def try_num(v):
     except:
         return s
 
-v1_raw = task["properties"]["variable"]
-v2_raw = task["properties"]["variableValue"]
-
-v1 = try_num(self.conector.variables.get(v1_raw, v1_raw))
-v2 = try_num(self.conector.variables.get(v2_raw, v2_raw))
 op = str(task["properties"]["comparator"]).strip().strip('"').strip("'")
 
-res = False
-if op in ["=", "=="]:   res = (str(v1) == str(v2))
-elif op == ">":          res = (float(v1) > float(v2))
-elif op == "<":          res = (float(v1) < float(v2))
-elif op == ">=":         res = (float(v1) >= float(v2))
-elif op == "<=":         res = (float(v1) <= float(v2))
-elif op == "!=":         res = (str(v1) != str(v2))
+# MODO EXPRESIÓN: comparador es una expresión Python entre backticks
+if op.startswith('`') and op.endswith('`'):
+    expr = op[1:-1]
+    full_scope = {**self.conector.variables}
+    try:
+        res = bool(eval(expr, {"__builtins__": {}}, full_scope))
+    except Exception as e:
+        res = False
+else:
+    # MODO NORMAL: comparar v1 vs v2
+    v1_raw = task["properties"]["variable"]
+    v2_raw = task["properties"]["variableValue"]
+    v1 = try_num(self.conector.variables.get(v1_raw, v1_raw))
+    v2 = try_num(self.conector.variables.get(v2_raw, v2_raw))
+
+    res = False
+    if op in ["=", "=="]:   res = (str(v1) == str(v2))
+    elif op == ">":          res = (float(v1) > float(v2))
+    elif op == "<":          res = (float(v1) < float(v2))
+    elif op == ">=":         res = (float(v1) >= float(v2))
+    elif op == "<=":         res = (float(v1) <= float(v2))
+    elif op == "!=":         res = (str(v1) != str(v2))
 
 branch = "true" if res else "false"
 if branch in task["branches"]:
@@ -234,8 +244,13 @@ import requests
 import json
 
 def resolve(val):
-    if isinstance(val, str) and val in self.conector.variables:
-        return self.conector.variables[val]
+    # Buscar primero en variables locales de función, luego en globales
+    if isinstance(val, str):
+        local_vars = getattr(self.conector, 'function_local_vars', {}) or {}
+        if val in local_vars:
+            return local_vars[val]
+        if val in self.conector.variables:
+            return self.conector.variables[val]
     return val
 
 def ensure_dict(val):
@@ -246,29 +261,23 @@ def ensure_dict(val):
         except: pass
     return {}
 
-# 1. Obtener inputs
-raw_url = resolve(task["properties"].get("url"))
-raw_qs  = resolve(task["properties"].get("querystring"))
+raw_url  = resolve(task["properties"].get("url"))
+raw_qs   = resolve(task["properties"].get("querystring"))
 raw_head = resolve(task["properties"].get("headers"))
-# Soporte para asignación: res = RequestGet(...)
 target_var = task.get("context") or task["properties"].get("o_result")
 
-url = str(raw_url).strip()
-params = ensure_dict(raw_qs)
+url     = str(raw_url).strip()
+params  = ensure_dict(raw_qs)
 headers = ensure_dict(raw_head)
 
-# 2. Ejecución (Sin el try/except interno que se come el error)
 response = requests.get(url, params=params, headers=headers, timeout=30)
-
-# CLAVE: Si el código es 4xx o 5xx, lanza una excepción que captura el Executor
-response.raise_for_status() 
+response.raise_for_status()
 
 try:
     result_data = response.json()
 except:
     result_data = response.text
 
-# 3. Guardar resultado
 if target_var:
     self.conector.variables[target_var] = result_data
 $body$
@@ -493,6 +502,15 @@ $body$
     $body$
 import re
 
+def resolve_var(val):
+    if isinstance(val, str):
+        local_vars = getattr(self.conector, 'function_local_vars', {}) or {}
+        if val in local_vars:
+            return local_vars[val]
+        if val in self.conector.variables:
+            return self.conector.variables[val]
+    return val
+
 props = task["properties"]
 
 SourceVariable = props.get("SourceVariable") or next(iter(props.values()), None)
@@ -505,26 +523,20 @@ rePattern      = str(rePattern).strip()
 newValue       = str(newValue).strip()
 TargetVariable = str(TargetVariable).strip()
 
-if SourceVariable in self.conector.variables:
-    SourceVariable = self.conector.variables[SourceVariable]
-if rePattern in self.conector.variables:
-    rePattern = self.conector.variables[rePattern]
-if newValue in self.conector.variables:
-    newValue = self.conector.variables[newValue]
+source_val  = resolve_var(SourceVariable)
+pattern_val = resolve_var(rePattern)
+newval_val  = resolve_var(newValue)
 
-if not rePattern:
-    rePattern = ' '
+if not pattern_val:
+    pattern_val = ' '
 
-patron = r"" + rePattern.replace(' ', '\s')
+patron = r"" + str(pattern_val).replace(' ', r'\s')
 
-if not patron:
-    result = SourceVariable
-else:
-    try:
-        result = re.sub(patron, newValue, SourceVariable)
-    except re.error as e:
-        print(f"[AVAP] replace - Error en el patrón: {e}")
-        result = ""
+try:
+    result = re.sub(patron, str(newval_val), str(source_val))
+except re.error as e:
+    print(f"[AVAP] replace - Error en el patrón: {e}")
+    result = str(source_val)
 
 self.conector.variables[TargetVariable] = result.replace('¨', '"')
 $body$
@@ -609,6 +621,15 @@ $body$
     $body$
 import re
 
+def resolve_var(val):
+    if isinstance(val, str):
+        local_vars = getattr(self.conector, 'function_local_vars', {}) or {}
+        if val in local_vars:
+            return local_vars[val]
+        if val in self.conector.variables:
+            return self.conector.variables[val]
+    return val
+
 props = task["properties"]
 
 SourceVariable = props.get("SourceVariable") or next(iter(props.values()), None)
@@ -619,13 +640,11 @@ SourceVariable = str(SourceVariable).strip()
 rePattern      = str(rePattern).strip()
 TargetVariable = str(TargetVariable).strip()
 
-if SourceVariable in self.conector.variables:
-    SourceVariable = self.conector.variables[SourceVariable]
-if rePattern in self.conector.variables:
-    rePattern = self.conector.variables[rePattern]
+source_val  = resolve_var(SourceVariable)
+pattern_val = resolve_var(rePattern)
 
-__patron = r"" + rePattern
-__m = re.findall(__patron, SourceVariable)
+__patron = r"" + str(pattern_val)
+__m = re.findall(__patron, str(source_val))
 __result = "".join(__m) if __m else None
 
 self.conector.variables[TargetVariable] = __result
@@ -681,8 +700,9 @@ TargetVariable = props.get("TargetVariable") or next(iter(props.values()), None)
 TargetVariable = str(TargetVariable).strip()
 
 param_list = []
-for key in self.conector.req.query_arguments.keys():
-    valor = self.conector.req.query_arguments[key][0]
+for key in self.conector.req.request.query_arguments.keys():
+    valor = self.conector.req.request.query_arguments[key][0]
+    valor = valor.decode('utf-8')
     param_list.append({key: valor})
 
 self.conector.variables[TargetVariable] = param_list
@@ -896,6 +916,126 @@ try:
     self.conector.variables[TargetVariable] = valorOrigen[key]
 except:
     self.conector.variables[TargetVariable] = None
+$body$
+) , 
+(
+    'variableToList',
+    '[{"item":"element","type":"variable"},{"item":"TargetVariable","type":"variable"}]',
+    $body$
+props = task["properties"]
+
+element        = props.get("element")        or next(iter(props.values()), None)
+TargetVariable = props.get("TargetVariable") or (list(props.values())[1] if len(props) > 1 else None)
+
+element        = str(element).strip()
+TargetVariable = str(TargetVariable).strip()
+
+if TargetVariable not in self.conector.variables:
+    self.conector.variables[TargetVariable] = []
+elif not isinstance(self.conector.variables[TargetVariable], list):
+    self.conector.variables[TargetVariable] = []
+
+if isinstance(element, str) and element in self.conector.variables:
+    element = self.conector.variables[element]
+
+# No añadir None a la lista
+if element is not None:
+    self.conector.variables[TargetVariable].append(element)
+$body$
+)
+, (
+    'go',
+    '[{"item":"function_name","type":"var"},{"item":"args","type":"var"}]',
+    $body$
+# go es manejado nativamente por AVAPExecutor._execute_go_async() en main.py.
+# Este código es un fallback de seguridad que no debería ejecutarse en condiciones normales.
+_func = task["properties"].get("function_name") or task["properties"].get("0", "unknown")
+print(f"[AVAP WARNING] go command reached bytecode fallback for function: {_func}")
+_target = task.get("context")
+if _target:
+    self.conector.variables[_target] = None
+$body$
+), (
+    'gather',
+    '[{"item":"id","type":"var"},{"item":"timeout","type":"var"}]',
+    $body$
+# gather es manejado nativamente por AVAPExecutor._execute_gather() en main.py.
+# Este código es un fallback de seguridad que no debería ejecutarse en condiciones normales.
+_identi = task["properties"].get("id") or task["properties"].get("0", "unknown")
+_target = task.get("context")
+print(f"[AVAP WARNING] gather command reached bytecode fallback for promise: {_identi}")
+
+_promise = self.conector.asynced_functions.get(_identi)
+_result = None
+
+if _promise and isinstance(_promise, dict):
+    _res_obj = _promise.get("resultado")
+    _thread  = _promise.get("thread")
+    if _res_obj is not None:
+        if not _res_obj.completado and _thread and _thread.is_alive():
+            _timeout_raw = task["properties"].get("timeout") or task["properties"].get("1")
+            _timeout_sec = None
+            try:
+                _timeout_sec = float(str(_timeout_raw)) / 1000.0
+            except:
+                pass
+            _thread.join(timeout=_timeout_sec)
+        if _res_obj.completado:
+            _result = _res_obj.result_value
+            if _res_obj.conector_variables:
+                for _k, _v in _res_obj.conector_variables.items():
+                    if not _k.startswith("_"):
+                        self.conector.variables[_k] = _v
+
+if _target:
+    self.conector.variables[_target] = _result
+$body$
+),
+ (
+    'ormCheckTable',
+    '[{"item":"dbaseName","type":"value"},{"item":"varTarget","type":"variable"}]',
+    $body$
+import re
+import json
+import sqlalchemy as sa
+
+def limpiar(texto):
+    return re.sub(r'[^a-zA-Z0-9]', '', texto)
+
+try:
+    __DEBUG = os.getenv("DEBUG")
+    if __DEBUG == "True": 
+        __DEBUG = True
+except:
+    __DEBUG = True
+
+command = "check"
+
+try:
+    dbaseName = task["properties"]["dbaseName"]
+    if task["properties"]["dbaseName"] in self.conector.variables:
+        dbaseName = self.conector.variables[task["properties"]["dbaseName"]]
+    if task["properties"]["dbaseName"] in self.conector.local_vars:
+        dbaseName = self.conector.local_vars[task["properties"]["dbaseName"]]
+except:
+    dbaseName = None
+
+try:
+    varTarget = task["properties"]["varTarget"]
+    if varTarget not in self.conector.variables:
+        self.conector.variables[varTarget] = None
+except:
+    varTarget = None
+
+if dbaseName in self.conector.variables:
+    dbaseName = self.conector.variables[dbaseName]
+if dbaseName in self.conector.local_vars:
+    dbaseName = self.conector.local_vars[dbaseName]
+
+insp = sa.inspect(self.conector.engine)
+created = insp.has_table(table_name=dbaseName)
+result = created
+self.conector.variables[varTarget] = str(result)
 $body$
 )
 ;
